@@ -161,7 +161,18 @@ function membership_claim(): ?array {
     if (current_user()) return null;
     $guest = guest_tracking_order();
     if ($guest && $guest['status'] === 'picked_up') {
+        // After pickup, the bearer QR alone cannot claim membership.
+        // Only the session which confirmed collection may claim for one hour.
+        $proof = $_SESSION['guest_pickup_claim'] ?? null;
         $session = $_SESSION['guest_track'];
+        if (!is_array($proof)
+            || !is_int($proof['order_id'] ?? null)
+            || !is_string($proof['token_hash'] ?? null)
+            || !is_int($proof['confirmed_at'] ?? null)
+            || $proof['order_id'] !== (int)$guest['id']
+            || !hash_equals((string)$session['token_hash'], $proof['token_hash'])
+            || $proof['confirmed_at'] > time()
+            || time() - $proof['confirmed_at'] > 3600) return null;
         return [
             'order_id' => (int)$guest['id'],
             'customer_id' => (int)$guest['customer_id'],
