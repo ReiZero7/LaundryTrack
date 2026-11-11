@@ -66,3 +66,5 @@ jobs:
             < laundrytrack_private/migrations/2026-11-11_order_rate_limiting.sql
       - name: Exercise quota rejection, identity isolation, reset, and failure behavior
         run: php tests/rate-limit-integration.php
+      - name: Verify login throttling and session-expiry policy on isolated database
+        run: php tests/security-hardening-integration.php
