@@ -246,8 +246,8 @@ code, url, page = guest.post({
     "action": "staff-confirm-pickup", "id": str(guest_order),
     "handoff_confirmed": "yes"
 }, "track-portal")
-ok(code == 403 and status(guest_order) == "ready",
-   "QR session cannot use staff confirmation action")
+ok("page=login" in url and status(guest_order) == "ready",
+   "anonymous QR session cannot use staff confirmation action")
 code, url, page = admin.post({
     "action": "staff-confirm-pickup", "id": str(guest_order),
     "handoff_confirmed": "yes"
