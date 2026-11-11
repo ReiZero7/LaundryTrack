@@ -16,32 +16,30 @@ if (!$admin && (int)$stats['ready_count'] > 0) {
 }
 ?>
 <div class="page-heading"><div><p class="eyebrow">OVERVIEW</p><h1>สวัสดี, <?= e(current_user()['full_name']) ?> 👋</h1><p>ภาพรวมรายการซักรีดและความคืบหน้าล่าสุด</p></div><?php if ($admin): ?><a class="btn btn-primary" href="<?= e(url('new-order')) ?>">+ สร้างออร์เดอร์</a><?php endif; ?></div>
-<?php if (!$admin && $readyNotifications): ?>
-<section class="pickup-notice" role="status">
+<?php if (!$admin): ?>
+<section id="pickup-live-notice" class="pickup-notice" role="status" <?= $readyNotifications ? '' : 'hidden' ?>>
     <div class="pickup-notice-title">
         <span class="pickup-notice-icon" aria-hidden="true">🔔</span>
         <div>
             <h2>ผ้าของคุณพร้อมรับแล้ว!</h2>
-            <p>มี <?= (int)$stats['ready_count'] ?> ออร์เดอร์พร้อมรับผ้า กรุณายืนยันหลังจากได้รับผ้าจริง</p>
+            <p>มี <span id="pickup-live-count"><?= (int)$stats['ready_count'] ?></span> ออร์เดอร์พร้อมรับผ้า กรุณายืนยันหลังจากได้รับผ้าจริง</p>
         </div>
     </div>
-    <div class="pickup-notice-list">
+    <div class="pickup-notice-list" id="pickup-live-list">
         <?php foreach ($readyNotifications as $notice): ?>
-        <div class="pickup-notice-item">
+        <div class="pickup-notice-item" data-order-id="<?= (int)$notice['id'] ?>">
             <strong><?= e($notice['order_no']) ?></strong>
             <a class="btn btn-primary" href="<?= e(url('order', ['id' => (int)$notice['id']])) ?>">ดูรายละเอียดและยืนยันรับผ้า</a>
         </div>
         <?php endforeach; ?>
     </div>
-    <?php if ((int)$stats['ready_count'] > count($readyNotifications)): ?>
-        <a class="text-link" href="<?= e(url('orders', ['status' => 'ready'])) ?>">ดูออร์เดอร์ที่พร้อมรับทั้งหมด</a>
-    <?php endif; ?>
+    <a id="pickup-live-more" class="text-link" href="<?= e(url('orders', ['status' => 'ready'])) ?>" <?= (int)$stats['ready_count'] > count($readyNotifications) ? '' : 'hidden' ?>>ดูออร์เดอร์ที่พร้อมรับทั้งหมด</a>
 </section>
 <?php endif; ?>
 <div class="metric-grid">
     <div class="metric-card"><p>ออร์เดอร์ทั้งหมด</p><strong><?= (int)$stats['total'] ?></strong><span>รายการในระบบ</span><div class="metric-icon">▤</div></div>
     <div class="metric-card"><p>กำลังดำเนินการ</p><strong><?= (int)$stats['processing'] ?></strong><span>รับแล้ว / กำลังซัก / พร้อมรับ</span><div class="metric-icon">↺</div></div>
-    <div class="metric-card"><p>พร้อมรับผ้า</p><strong><?= (int)$stats['ready_count'] ?></strong><span>รอลูกค้ามารับ</span><div class="metric-icon">✓</div></div>
+    <div class="metric-card"><p>พร้อมรับผ้า</p><strong id="pickup-live-metric"><?= (int)$stats['ready_count'] ?></strong><span>รอลูกค้ามารับ</span><div class="metric-icon">✓</div></div>
     <div class="metric-card"><p>ยอดค่าบริการรวม</p><strong>฿<?= money($stats['amount']) ?></strong><span>ไม่รวมออร์เดอร์ยกเลิก (ไม่ใช่ยอดเงินรับจริง)</span><div class="metric-icon">฿</div></div>
 </div>
 <div class="panel"><div class="panel-header"><div><h2>รายการซักรีดล่าสุด</h2><p>ติดตามความคืบหน้าทุกออร์เดอร์ได้ทันที</p></div><a class="text-link" href="<?= e(url('orders')) ?>">ดูทั้งหมด →</a></div>
