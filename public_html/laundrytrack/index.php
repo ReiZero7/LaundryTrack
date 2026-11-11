@@ -50,6 +50,26 @@ try {
         );
         exit;
     }
+    if ($page === 'progress-feed') {
+        header('Content-Type: application/json; charset=utf-8');
+        header('Cache-Control: private, no-store, max-age=0');
+        header('X-Robots-Tag: noindex, nofollow');
+        if (!current_user()) { http_response_code(401); echo '{"error":"unauthorized"}'; exit; }
+        if (is_admin()) { http_response_code(403); echo '{"error":"customer_only"}'; exit; }
+        $stmt = db()->prepare("SELECT id,status FROM laundry__orders_tbl WHERE customer_id=? ORDER BY id DESC LIMIT 30");
+        $stmt->execute([(int)current_user()['id']]);
+        $out = [];
+        foreach ($stmt->fetchAll() as $order) {
+            $out[] = [
+                'id' => (int)$order['id'],
+                'status' => (string)$order['status'],
+                'label' => status_label((string)$order['status']),
+                'stage' => order_progress_stage((string)$order['status']),
+            ];
+        }
+        echo json_encode(['orders' => $out], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
     if (in_array($page, ['track', 'track-portal', 'track-feed'], true)) {
         header('Cache-Control: private, no-store, max-age=0');
         header('Referrer-Policy: no-referrer');
