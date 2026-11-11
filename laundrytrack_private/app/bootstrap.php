@@ -130,6 +130,9 @@ function tracking_hash(string $token): ?string {
     // Exactly 32 random bytes in lowercase hex. No order IDs as auth secrets.
     return preg_match('/^[a-f0-9]{64}$/D', $token) ? hash('sha256', $token) : null;
 }
+function shop_order_link(): string {
+    return 'https://angsila.informatics.buu.ac.th/~68160395/laundrytrack/index.php?page=order-start';
+}
 function tracking_link(string $token): string {
     // Derived from configured actual web origin; avoid Host header injection.
     // This deployment is fixed at the university public URL.
