@@ -138,6 +138,12 @@ function process_action(): never {
                 }
                 // Honeypot: ignore bots that fill hidden fields.
                 if (post_string('website') !== '') { http_response_code(400); exit('Invalid form'); }
+                // Persistent counters also cover fresh browsers/sessions; do this
+                // before the order transaction so a rollback cannot undo the limit.
+                if (!order_rate_limit_allowed()) {
+                    flash('มีคำขอสั่งบริการมากเกินไป หรือระบบรับคำขอไม่พร้อม กรุณาลองใหม่ภายหลังหรือติดต่อร้าน', 'error');
+                    go('self-order');
+                }
                 $name = $member ? (string)current_user()['full_name'] : post_string('full_name');
                 $phone = $member ? '' : post_string('phone');
                 $due = post_string('due_at');

@@ -199,6 +199,97 @@ function order_progress_stage(string $status): int {
         'cancelled' => 0,
     ][$status] ?? 0;
 }
+/**
+ * Persistent, cross-session order throttling.
+ *
+ * Anonymous users are keyed by the server-provided REMOTE_ADDR. Authenticated
+ * customers are keyed by their account ID. Client-supplied forwarding headers
+ * are intentionally ignored. Only keyed HMAC digests are stored in MySQL.
+ *
+ * Requires RATE_LIMIT_SECRET (>=32 characters) in the private .env and the
+ * InnoDB table from migrations/2026-11-11_order_rate_limiting.sql.
+ * Missing configuration or DB failure fails closed for new self-orders.
+ */
+function order_rate_limit_allowed(): bool {
+    $secret = setting('RATE_LIMIT_SECRET');
+    if (strlen($secret) < 32) {
+        error_log('[LaundryTrack] RATE_LIMIT_SECRET is missing or too short');
+        return false;
+    }
+
+    $user = current_user();
+    if ($user && ($user['role'] ?? '') === 'customer') {
+        $identity = 'member:' . (int)$user['id'];
+        $limits = [
+            ['member-15m', 900, 10],
+            ['member-24h', 86400, 50],
+        ];
+    } else {
+        // Never trust X-Forwarded-For / X-Real-IP supplied by the client.
+        $ip = $_SERVER['REMOTE_ADDR'] ?? '';
+        if (!is_string($ip) || !filter_var($ip, FILTER_VALIDATE_IP)) {
+            error_log('[LaundryTrack] Valid REMOTE_ADDR unavailable for guest order');
+            return false;
+        }
+        $identity = 'guest-ip:' . $ip;
+        $limits = [
+            ['guest-15m', 900, 8],
+            ['guest-24h', 86400, 30],
+        ];
+    }
+
+    $identityHash = hash_hmac('sha256', $identity, $secret);
+    $now = time();
+    try {
+        $pdo = db();
+        $pdo->beginTransaction();
+        try {
+            // Materialize both counters and lock the rows in the same
+            // transaction, so concurrent requests cannot bypass the cap.
+            $seed = $pdo->prepare("INSERT INTO laundry__order_rate_limits_tbl
+                (scope, identity_hash, window_started_at, attempt_count)
+                VALUES (?, ?, ?, 0)
+                ON DUPLICATE KEY UPDATE identity_hash=identity_hash");
+            $read = $pdo->prepare("SELECT window_started_at, attempt_count
+                FROM laundry__order_rate_limits_tbl
+                WHERE scope=? AND identity_hash=? FOR UPDATE");
+            $write = $pdo->prepare("UPDATE laundry__order_rate_limits_tbl
+                SET window_started_at=?, attempt_count=?
+                WHERE scope=? AND identity_hash=?");
+
+            $counters = [];
+            foreach ($limits as [$scope, $seconds, $maxAttempts]) {
+                $seed->execute([$scope, $identityHash, $now]);
+                $read->execute([$scope, $identityHash]);
+                $record = $read->fetch();
+                if (!$record) throw new RuntimeException('Missing rate-limit counter');
+                $started = (int)$record['window_started_at'];
+                $count = (int)$record['attempt_count'];
+                $inWindow = $started <= $now && ($now - $started) < $seconds;
+                if ($inWindow && $count >= $maxAttempts) {
+                    $pdo->rollBack();
+                    return false;
+                }
+                $counters[] = [
+                    $scope, $inWindow ? $started : $now,
+                    $inWindow ? $count + 1 : 1,
+                ];
+            }
+            foreach ($counters as [$scope, $started, $count]) {
+                $write->execute([$started, $count, $scope, $identityHash]);
+            }
+            $pdo->commit();
+            return true;
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            throw $e;
+        }
+    } catch (Throwable $e) {
+        error_log('[LaundryTrack] Cannot process order rate limit: ' . $e->getMessage());
+        return false;
+    }
+}
+
 function money(float|string|null $amount): string {
     return number_format((float)($amount ?? 0), 2);
 }
