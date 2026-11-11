@@ -19,7 +19,7 @@ $guestOrder = current_user() ? null : guest_tracking_order();
         data-initial-status="<?= e($guestOrder['status']) ?>">
         <div class="panel-header">
             <h2>หมายเลข <?= e($guestOrder['order_no']) ?></h2>
-            <span id="guest-order-status" class="status <?= e(status_class($guestOrder['status'])) ?>"><?= e(status_label($guestOrder['status'])) ?></span>
+            <span id="guest-order-status" class="status <?= e(status_class($guestOrder['status'])) ?>"><?= e(order_status_label($guestOrder['status'], $guestOrder['creator_role'])) ?></span>
         </div>
         <div class="info-grid">
             <div><small>กำหนดรับผ้าโดยประมาณ</small><strong><?= e(date('d/m/Y H:i', strtotime($guestOrder['due_at']))) ?></strong></div>
