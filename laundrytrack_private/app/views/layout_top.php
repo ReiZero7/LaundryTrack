@@ -9,6 +9,12 @@ if (is_admin()) {
     $nav[] = ['services', 'บริการและราคา', '◈'];
     $nav[] = ['customers', 'ลูกค้า', '♙'];
 }
+$readyAlertCount = 0;
+if ($user && !is_admin()) {
+    $readyStmt = db()->prepare("SELECT COUNT(*) FROM laundry__orders_tbl WHERE customer_id=? AND status='ready'");
+    $readyStmt->execute([(int)$user['id']]);
+    $readyAlertCount = (int)$readyStmt->fetchColumn();
+}
 $flashMessage = take_flash();
 ?><!doctype html>
 <html lang="th">
@@ -36,6 +42,6 @@ $flashMessage = take_flash();
     </aside>
 <?php endif; ?>
     <div class="content-area <?= $user ? '' : 'guest-area' ?>">
-        <header class="topbar"><div><span class="topbar-kicker">LAUNDRY MANAGEMENT</span><strong><?= $user ? 'จัดการซักรีดได้ในที่เดียว' : 'LaundryTrack' ?></strong></div><span class="topbar-tag"><?= $user ? ($user['role'] === 'admin' ? 'ADMIN PANEL' : 'CUSTOMER PORTAL') : 'WELCOME' ?></span></header>
+        <header class="topbar"><div><span class="topbar-kicker">LAUNDRY MANAGEMENT</span><strong><?= $user ? 'จัดการซักรีดได้ในที่เดียว' : 'LaundryTrack' ?></strong></div><div class="topbar-actions"><?php if ($readyAlertCount > 0): ?><a class="notification-bell" href="<?= e(url('dashboard')) ?>" aria-label="มี <?= $readyAlertCount ?> ออร์เดอร์ที่พร้อมรับผ้า">🔔 พร้อมรับผ้า <span class="notification-count"><?= $readyAlertCount ?></span></a><?php endif; ?><span class="topbar-tag"><?= $user ? ($user['role'] === 'admin' ? 'ADMIN PANEL' : 'CUSTOMER PORTAL') : 'WELCOME' ?></span></div></header>
         <main class="main-content">
         <?php if ($flashMessage): ?><div class="alert <?= $flashMessage['kind'] === 'error' ? 'alert-error' : 'alert-success' ?>" role="status"><?= e($flashMessage['message']) ?></div><?php endif; ?>
