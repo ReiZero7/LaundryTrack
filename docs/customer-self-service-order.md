@@ -54,3 +54,18 @@ The order record is initially stored with the existing `received` status because
 - No verified phone ownership or email ownership is implemented; the registration step is optional and not email-verified.
 - This is *in-page polling* (~30 seconds while website visible), not remote push/SMS.
 - Self-order should be regarded as a **request**, not an assurance laundry was physically handed over. Admin still controls status advancement.
+
+## Review follow-up: physical drop-off confirmation
+
+After the 6/6 functional flow tests, PR #4 now shows self-service customer-originated orders in their initial `received` state as **รอลูกค้านำผ้ามาส่ง** across customer/admin lists, detail, public QR page, guest portal, and guest polling. The underlying DB enum remains `received` (no database migration). The administrator must check the **ยืนยันว่าร้านได้รับผ้าจริงแล้ว** checkbox when advancing a self-created order from `received` to `washing`; the POST handler enforces the acknowledgement in addition to the view. The `cancelled` transition does **not** require this checkbox. Admin-created walk-in/member orders retain the original received-to-washing behavior.
+
+This safeguards status transitions but does **not** persist a separate time-stamped physical handoff status. A proper `requested → received → washing` state with a migration remains the recommended future design.
+
+### Regression cases added
+
+- New guest self-order shows **รอลูกค้านำผ้ามาส่ง** on its success page, Guest QR track page and orders listings.
+- New member self-order shows the same label on member order details and admin listings.
+- Admin opens a customer-created order; clicking `washing` without checking dropoff acknowledgement must be rejected; checking it must advance the order.
+- Admin can cancel customer-created requests without checking the physical-receipt acknowledgement.
+- Admin-created order should still move received-to-washing without the new acknowledgement.
+- Older PR #3 QR tracking and auto status update must still work.
