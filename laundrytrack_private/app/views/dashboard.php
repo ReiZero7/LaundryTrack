@@ -16,6 +16,22 @@ if (!$admin && (int)$stats['ready_count'] > 0) {
 }
 ?>
 <div class="page-heading"><div><p class="eyebrow">OVERVIEW</p><h1>สวัสดี, <?= e(current_user()['full_name']) ?> 👋</h1><p>ภาพรวมรายการซักรีดและความคืบหน้าล่าสุด</p></div><?php if ($admin): ?><a class="btn btn-primary" href="<?= e(url('new-order')) ?>">+ สร้างออร์เดอร์</a><?php endif; ?></div>
+<?php if ($admin): ?>
+<section class="panel self-service-shop-panel">
+    <div class="panel-header"><div><h2>QR Code ให้ลูกค้าสร้างออร์เดอร์เอง</h2>
+        <p>พิมพ์ QR นี้ติดหน้าร้าน ลูกค้าสแกนแล้วเลือกสมาชิกหรือสั่งบริการได้ทันที</p></div>
+    </div>
+    <?php $shopOrderUrl = shop_order_link(); ?>
+    <div class="walkin-qr-output" data-qr-link="<?= e($shopOrderUrl) ?>">
+        <div id="order-qr-code" aria-label="QR Code สำหรับเริ่มสร้างออร์เดอร์ด้วยตนเอง"></div>
+        <label>ลิงก์สร้างออร์เดอร์ด้วยตนเอง
+            <input id="order-tracking-url" type="text" readonly value="<?= e($shopOrderUrl) ?>">
+        </label>
+        <button class="btn btn-light" type="button" id="copy-order-tracking-url">คัดลอกลิงก์ร้าน</button>
+    </div>
+    <p class="muted">QR ประจำร้านนี้ใช้ร่วมกันได้ทุกคน และไม่ใช่ QR ลับสำหรับดูออร์เดอร์ใดออร์เดอร์หนึ่ง</p>
+</section>
+<?php endif; ?>
 <?php if (!$admin): ?>
 <section id="pickup-live-notice" class="pickup-notice" role="status" <?= $readyNotifications ? '' : 'hidden' ?>>
     <div class="pickup-notice-title">
