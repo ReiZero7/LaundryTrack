@@ -1,0 +1,68 @@
+name: PHP lint and rate-limit integration
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  php-lint:
+    name: PHP syntax lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_mysql
+          coverage: none
+      - name: Lint all application and test PHP files
+        run: |
+          find laundrytrack_private/app public_html/laundrytrack tests -type f -name '*.php' -print0 \
+            | xargs -0 -n1 php -l
+
+  rate-limit-integration:
+    name: Isolated MySQL rate-limit integration
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: ci-local-only
+          MYSQL_DATABASE: laundrytrack_ci
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_mysql
+          coverage: none
+      - name: Create disposable local test configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            printf '%s\n' 'APP_ENV=ci' 'DB_HOST=127.0.0.1' 'DB_PORT=3306' 'DB_NAME=laundrytrack_ci' 'DB_USER=root' 'DB_PASS=ci-local-only'
+            printf 'RATE_LIMIT_SECRET='
+            php -r 'echo bin2hex(random_bytes(32)), PHP_EOL;'
+          } > laundrytrack_private/.env
+          chmod 600 laundrytrack_private/.env
+      - name: Migrate only the disposable MySQL database
+        shell: bash
+        run: |
+          set -euo pipefail
+          MYSQL_PWD=ci-local-only mysql -h 127.0.0.1 -P 3306 -u root laundrytrack_ci \
+            < laundrytrack_private/migrations/2026-11-11_order_rate_limiting.sql
+      - name: Exercise quota rejection, identity isolation, reset, and failure behavior
+        run: php tests/rate-limit-integration.php
