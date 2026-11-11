@@ -63,3 +63,21 @@ body{background:radial-gradient(circle at 92% 14%,#d5f3fa 0,transparent 30%),rad
 .pickup-toast a{display:inline-flex;align-items:center;border-radius:9px;background:#d3f8e8;color:#115e59;padding:7px 12px;font-weight:800}
 .pickup-toast a:hover{background:#b2eeda}
 @media(max-width:450px){.pickup-toast{right:14px;left:14px;bottom:14px}}
+
+
+/* Walk-in order and guest QR tracking */
+.customer-mode-picker{grid-column:1/-1;display:grid;gap:13px;padding:16px;border:1px solid #dbe9e8;border-radius:14px;background:#f8fcfb}
+.customer-mode-picker>label{display:flex;align-items:center;gap:10px}
+.customer-mode-picker input[type=radio]{width:auto!important;min-height:0!important;accent-color:#087f72}
+.walkin-customer-fields{display:grid;gap:13px}
+#existing-customer-fields{display:grid;gap:13px}
+.walkin-qr-panel{margin-bottom:20px}
+.walkin-qr-output{display:grid;gap:14px;justify-items:start;padding:15px;background:#f0faf7;border:1px solid #c8e8df;border-radius:14px;margin-bottom:15px}
+#order-qr-code{background:white;padding:12px;border-radius:12px;display:inline-block;max-width:100%}
+.walkin-qr-output label{display:grid;gap:8px;width:100%;font-weight:700;font-size:12px;color:#315a53}
+.walkin-qr-output input{width:100%;min-width:0;padding:11px;border:1px solid #c4dbd5;border-radius:9px;background:white;color:#163f3b}
+.guest-tracking-grid{display:grid;grid-template-columns:minmax(0,2fr) minmax(260px,1fr);gap:18px;align-items:start}
+.guest-tracking-card{max-width:840px}
+.guest-ready-message{background:#e7f8ef;border:1px solid #a6e4c4;color:#16634e;padding:16px;border-radius:12px;font-weight:700}
+#guest-pickup-form{margin:16px 0}
+@media(max-width:800px){.guest-tracking-grid{grid-template-columns:1fr}}
