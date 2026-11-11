@@ -1,6 +1,6 @@
 <?php
 $id = filter_var($_GET['id'] ?? null, FILTER_VALIDATE_INT) ?: 0;
-$stmt = db()->prepare('SELECT o.*,u.full_name AS customer_name,u.email AS customer_email,u.phone AS customer_phone,cu.full_name AS creator_name,cu.role AS creator_role FROM laundry__orders_tbl o JOIN laundry__users_tbl u ON u.id=o.customer_id JOIN laundry__users_tbl cu ON cu.id=o.created_by WHERE o.id=?' . (is_admin() ? '' : ' AND o.customer_id=?'));
+$stmt = db()->prepare('SELECT o.*,pr.requested_at AS pickup_requested_at,pr.confirmed_at AS pickup_confirmed_at,u.full_name AS customer_name,u.email AS customer_email,u.phone AS customer_phone,cu.full_name AS creator_name,cu.role AS creator_role FROM laundry__orders_tbl o JOIN laundry__users_tbl u ON u.id=o.customer_id JOIN laundry__users_tbl cu ON cu.id=o.created_by LEFT JOIN laundry__pickup_requests_tbl pr ON pr.order_id=o.id WHERE o.id=?' . (is_admin() ? '' : ' AND o.customer_id=?'));
 $stmt->execute(is_admin() ? [$id] : [$id, current_user()['id']]);
 $order = $stmt->fetch();
 if (!$order) { http_response_code(404); echo '<div class="empty-state"><h2>ไม่พบออร์เดอร์หรือไม่มีสิทธิ์เข้าถึง</h2><a href="' . e(url('orders')) . '" class="btn btn-primary">กลับไปรายการ</a></div>'; return; }
@@ -56,16 +56,36 @@ $nextStates = $transitions[$order['status']] ?? [];
 <?php if (!is_admin() && $order['status'] === 'ready'): ?>
 <div class="pickup-confirm">
     <h3>🔔 ผ้าของคุณพร้อมรับแล้ว!</h3>
-    <p>เมื่อมารับผ้าจากร้านและตรวจสอบเรียบร้อยแล้ว กรุณากดยืนยันการรับผ้าด้านล่าง</p>
-    <form method="post" action="index.php" class="form-stack">
-        <?= csrf_field() ?>
-        <input type="hidden" name="action" value="order-confirm-pickup">
-        <input type="hidden" name="id" value="<?= (int)$order['id'] ?>">
-        <button type="submit" class="btn btn-primary btn-block">✓ ยืนยันว่าได้รับผ้าแล้ว</button>
-    </form>
+    <?php if ($order['pickup_requested_at']): ?>
+        <p>✓ แจ้งความประสงค์รับผ้าแล้ว กรุณารอให้พนักงานตรวจสอบและยืนยันส่งมอบที่ร้าน</p>
+    <?php else: ?>
+        <p>เมื่อมาถึงร้าน กรุณากดแจ้งความประสงค์รับผ้า จากนั้นพนักงานจะตรวจสอบและยืนยันส่งมอบจริง</p>
+        <form method="post" action="index.php" class="form-stack">
+            <?= csrf_field() ?>
+            <input type="hidden" name="action" value="order-confirm-pickup">
+            <input type="hidden" name="id" value="<?= (int)$order['id'] ?>">
+            <button type="submit" class="btn btn-primary btn-block">แจ้งพนักงานว่าต้องการรับผ้า</button>
+        </form>
+    <?php endif; ?>
 </div>
 <?php elseif (is_admin() && $order['status'] === 'ready'): ?>
-<p class="pickup-admin-note">🔔 แจ้งลูกค้าแล้วว่าผ้าพร้อมรับ กำลังรอลูกค้ายืนยันการรับผ้า</p>
+    <?php if ($order['pickup_requested_at']): ?>
+    <div class="pickup-confirm">
+        <h3>🧺 ลูกค้าแจ้งความประสงค์รับผ้าแล้ว</h3>
+        <p>ตรวจสอบออร์เดอร์และส่งมอบผ้าจริงก่อนยืนยันปิดออร์เดอร์</p>
+        <form method="post" action="index.php" class="form-stack">
+            <?= csrf_field() ?>
+            <input type="hidden" name="action" value="staff-confirm-pickup">
+            <input type="hidden" name="id" value="<?= (int)$order['id'] ?>">
+            <label class="dropoff-confirm-check"><input type="checkbox" name="handoff_confirmed" value="yes" required> ยืนยันว่าได้ตรวจสอบและส่งมอบผ้าให้ลูกค้าจริงแล้ว</label>
+            <button type="submit" class="btn btn-primary btn-block">พนักงานยืนยันส่งมอบและปิดออร์เดอร์</button>
+        </form>
+    </div>
+    <?php else: ?>
+    <p class="pickup-admin-note">🔔 ผ้าพร้อมรับแล้ว กำลังรอลูกค้าส่งคำขอรับผ้า</p>
+    <?php endif; ?>
+<?php elseif ($order['status'] === 'picked_up'): ?>
+<p class="pickup-admin-note">✓ ออร์เดอร์นี้ปิดการรับผ้าแล้ว โปรดตรวจสอบผู้ยืนยันส่งมอบในประวัติสถานะ</p>
 <?php endif; ?>
 <?php if (is_admin() && $nextStates): ?><div class="change-status"><h3>เปลี่ยนสถานะ</h3><form method="post" action="index.php" class="form-stack"><?= csrf_field() ?><input type="hidden" name="action" value="order-status"><input type="hidden" name="id" value="<?= $id ?>"><select name="status" required><?php foreach ($nextStates as $status): ?><option value="<?= e($status) ?>"><?= e(status_label($status)) ?></option><?php endforeach; ?></select><?php if ($selfServiceWaitingDropoff): ?>
     <label class="dropoff-confirm-check"><input type="checkbox" name="dropoff_confirmed" value="yes"> ยืนยันว่าร้านได้รับผ้าจริงแล้ว (ต้องตรวจรับก่อนเปลี่ยนเป็นรับผ้าแล้ว)</label>

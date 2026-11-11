@@ -141,10 +141,12 @@ function tracking_link(string $token): string {
 function guest_tracking_order(): ?array {
     $guest = $_SESSION['guest_track'] ?? null;
     if (!is_array($guest) || !is_int($guest['order_id'] ?? null) || !is_string($guest['token_hash'] ?? null)) return null;
-    $stmt = db()->prepare("SELECT o.id,o.order_no,o.status,o.due_at,o.customer_id,cu.role AS creator_role
+    $stmt = db()->prepare("SELECT o.id,o.order_no,o.status,o.due_at,o.customer_id,cu.role AS creator_role,
+               pr.requested_at AS pickup_requested_at
         FROM laundry__orders_tbl o
         INNER JOIN laundry__users_tbl cu ON cu.id=o.created_by
         INNER JOIN laundry__users_tbl u ON u.id=o.customer_id
+        LEFT JOIN laundry__pickup_requests_tbl pr ON pr.order_id=o.id
         WHERE o.id=? AND o.tracking_token_hash=? AND u.email IS NULL
         LIMIT 1");
     $stmt->execute([$guest['order_id'], $guest['token_hash']]);
@@ -161,18 +163,24 @@ function membership_claim(): ?array {
     if (current_user()) return null;
     $guest = guest_tracking_order();
     if ($guest && $guest['status'] === 'picked_up') {
-        // After pickup, the bearer QR alone cannot claim membership.
-        // Only the session which confirmed collection may claim for one hour.
+        // After staff confirms physical handoff, the QR alone is still insufficient.
+        // The same session that requested pickup has one hour after staff approval.
         $proof = $_SESSION['guest_pickup_claim'] ?? null;
         $session = $_SESSION['guest_track'];
         if (!is_array($proof)
             || !is_int($proof['order_id'] ?? null)
             || !is_string($proof['token_hash'] ?? null)
-            || !is_int($proof['confirmed_at'] ?? null)
+            || !is_int($proof['requested_at'] ?? null)
             || $proof['order_id'] !== (int)$guest['id']
             || !hash_equals((string)$session['token_hash'], $proof['token_hash'])
-            || $proof['confirmed_at'] > time()
-            || time() - $proof['confirmed_at'] > 3600) return null;
+            || $proof['requested_at'] > time()) return null;
+        $stmt = db()->prepare("SELECT requested_source, UNIX_TIMESTAMP(confirmed_at) AS confirmed_epoch
+            FROM laundry__pickup_requests_tbl WHERE order_id=? AND confirmed_at IS NOT NULL");
+        $stmt->execute([(int)$guest['id']]);
+        $pickup = $stmt->fetch();
+        $approvedAt = (int)($pickup['confirmed_epoch'] ?? 0);
+        if (!$pickup || $pickup['requested_source'] !== 'guest'
+            || $approvedAt < 1 || $approvedAt > time() || time() - $approvedAt > 3600) return null;
         return [
             'order_id' => (int)$guest['id'],
             'customer_id' => (int)$guest['customer_id'],

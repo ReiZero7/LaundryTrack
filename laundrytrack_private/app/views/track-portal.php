@@ -26,11 +26,12 @@ $guestOrder = current_user() ? null : guest_tracking_order();
             <div><small>การอัปเดต</small><strong>อัตโนมัติทุก 30 วินาที</strong></div>
         </div>
         <p id="guest-ready-message" class="guest-ready-message" role="status" <?= $guestOrder['status'] === 'ready' ? '' : 'hidden' ?>>🔔 ผ้าพร้อมรับแล้ว กรุณามารับผ้าที่ร้าน</p>
-        <form id="guest-pickup-form" method="post" action="index.php" class="form-stack" <?= $guestOrder['status'] === 'ready' ? '' : 'hidden' ?>>
+        <p id="guest-pickup-pending" class="pickup-admin-note" role="status" <?= $guestOrder['status'] === 'ready' && $guestOrder['pickup_requested_at'] ? '' : 'hidden' ?>>✓ แจ้งความประสงค์รับผ้าแล้ว กรุณารอพนักงานตรวจสอบและยืนยันส่งมอบจริง</p>
+        <form id="guest-pickup-form" method="post" action="index.php" class="form-stack" <?= $guestOrder['status'] === 'ready' && !$guestOrder['pickup_requested_at'] ? '' : 'hidden' ?>>
             <?= csrf_field() ?>
             <input type="hidden" name="action" value="guest-confirm-pickup">
-            <p>เมื่อมารับผ้าและตรวจสอบเรียบร้อยแล้ว จึงกดยืนยันรับผ้า</p>
-            <button class="btn btn-primary" type="submit">✓ ยืนยันว่าได้รับผ้าแล้ว</button>
+            <p>เมื่อถึงร้าน ให้แจ้งพนักงานว่าต้องการรับผ้า พนักงานจะตรวจสอบและยืนยันส่งมอบจริง</p>
+            <button class="btn btn-primary" type="submit">แจ้งพนักงานว่าต้องการรับผ้า</button>
         </form>
         <p class="muted">ลิงก์จาก QR เป็นสิทธิ์เข้าถึงเฉพาะออร์เดอร์นี้ อย่าแชร์ลิงก์หรือ QR ให้ผู้อื่น</p>
         <?php if ($guestOrder['status'] === 'picked_up' && ($eligibleClaim = membership_claim()) !== null

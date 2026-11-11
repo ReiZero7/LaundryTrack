@@ -209,21 +209,61 @@ ok(count("SELECT COUNT(*) FROM laundry__status_history_tbl WHERE order_id=%d" % 
 code, url, page = admin.post({
     "action": "order-status", "id": str(guest_order), "status": "picked_up",
 }, "order", id=str(guest_order))
-ok(status(guest_order) == "ready", "admin cannot perform customer pickup confirmation")
+ok(status(guest_order) == "ready", "admin status transition cannot bypass staff pickup flow")
 
-# The QR session that confirms pickup receives the one-hour membership claim.
-code, url, page = guest.post({
+code, url, page = admin.post({
+    "action": "staff-confirm-pickup", "id": str(guest_order),
+    "handoff_confirmed": "yes",
+}, "order", id=str(guest_order))
+ok(status(guest_order) == "ready", "staff cannot close order before customer pickup request")
+
+# The QR session requests pickup; staff verifies actual handoff afterward.
+requester = Browser()
+code, url, page = requester.post({
     "action": "guest-track-login", "token": token,
 }, "track", token=token)
-ok("page=track-portal" in url, "guest tracks ready order in checkout session")
-code, url, page = guest.post({"action": "guest-confirm-pickup"}, "track-portal")
-ok(status(guest_order) == "picked_up", "guest pickup confirmation changes ready to picked_up")
-code, url, page = guest.get("join-after-order")
-ok(code == 200 and "self-order-join" in page, "pickup session can create linked account")
+ok("page=track-portal" in url, "independent QR-only browser starts tracking ready order")
+code, url, page = requester.post({"action": "guest-confirm-pickup"}, "track-portal")
+ok(status(guest_order) == "ready", "guest request does not mark order picked_up")
+ok(query("SELECT requested_source FROM laundry__pickup_requests_tbl WHERE order_id=%d" % guest_order) == "guest",
+   "guest pickup request stored with source")
+code, url, page = requester.get("track-portal")
+ok("guest-pickup-pending" in page and "แจ้งความประสงค์รับผ้าแล้ว" in page,
+   "guest sees staff verification pending")
+code, url, page = requester.get("join-after-order")
+ok("self-order-join" not in page, "QR guest cannot claim account before staff approval")
+code, url, page = outsider.get("join-after-order")
+ok("self-order-join" not in page, "other QR session has no membership claim")
+
+code, url, page = requester.post({"action": "guest-confirm-pickup"}, "track-portal")
+ok(status(guest_order) == "ready" and count(
+    "SELECT COUNT(*) FROM laundry__pickup_requests_tbl WHERE order_id=%d" % guest_order) == 1,
+   "repeated guest pickup request is idempotent")
+code, url, page = admin.post({
+    "action": "staff-confirm-pickup", "id": str(guest_order)
+}, "order", id=str(guest_order))
+ok(status(guest_order) == "ready", "staff must check physical handoff checkbox")
+code, url, page = requester.post({
+    "action": "staff-confirm-pickup", "id": str(guest_order),
+    "handoff_confirmed": "yes"
+}, "track-portal")
+ok("page=login" in url and status(guest_order) == "ready",
+   "anonymous QR session cannot use staff confirmation action")
+code, url, page = admin.post({
+    "action": "staff-confirm-pickup", "id": str(guest_order),
+    "handoff_confirmed": "yes"
+}, "order", id=str(guest_order))
+ok(status(guest_order) == "picked_up", "staff confirmation finalizes guest handoff")
+ok(query("SELECT confirmed_by IS NOT NULL FROM laundry__pickup_requests_tbl WHERE order_id=%d" % guest_order) == "1",
+   "staff approver is recorded")
+ok(count("SELECT COUNT(*) FROM laundry__status_history_tbl WHERE order_id=%d AND new_status='picked_up'" % guest_order) == 1,
+   "only one final status history event recorded")
+code, url, page = requester.get("join-after-order")
+ok(code == 200 and "self-order-join" in page, "requesting guest can claim after staff handoff")
 code, url, page = outsider.get("join-after-order")
 ok("self-order-join" not in page, "incognito QR session cannot claim after pickup")
 
-code, url, page = guest.post({
+code, url, page = requester.post({
     "action": "self-order-join", "email": "converted@example.test",
     "password": "converted-strong-password",
 }, "join-after-order")
@@ -232,7 +272,7 @@ ok(query("SELECT tracking_token_hash IS NULL FROM laundry__orders_tbl WHERE id=%
    "successful conversion revokes guest QR")
 code, url, page = outsider.get("track", token=token)
 ok("ลิงก์ติดตามไม่ถูกต้อง" in page, "old tracking link invalid after member conversion")
-code, url, page = guest.get("order", id=str(guest_order))
+code, url, page = requester.get("order", id=str(guest_order))
 ok(code == 200 and "CI Guest" in page, "linked member can view claimed order history")
 
 # Member-only order and account-isolation checks.
@@ -270,17 +310,34 @@ for state in ["received", "washing", "drying", "ready"]:
 code, url, page = member_b.post({
     "action": "order-confirm-pickup", "id": str(member_id)
 }, "progress")
-ok(status(member_id) == "ready", "different member cannot confirm someone else's pickup")
+ok(status(member_id) == "ready" and count(
+    "SELECT COUNT(*) FROM laundry__pickup_requests_tbl WHERE order_id=%d" % member_id) == 0,
+   "different member cannot create pickup request")
 code, url, page = member_a.post({
     "action": "order-confirm-pickup", "id": str(member_id)
 }, "order", id=str(member_id))
-ok(status(member_id) == "picked_up", "correct member confirms own pickup")
+ok(status(member_id) == "ready", "member requests pickup without changing final status")
+ok(query("SELECT requested_source FROM laundry__pickup_requests_tbl WHERE order_id=%d" % member_id) == "member",
+   "member request recorded")
 code, url, page = member_a.post({
     "action": "order-confirm-pickup", "id": str(member_id)
 }, "order", id=str(member_id))
-ok(status(member_id) == "picked_up", "duplicate member pickup leaves final state intact")
+ok(count("SELECT COUNT(*) FROM laundry__pickup_requests_tbl WHERE order_id=%d" % member_id) == 1,
+   "duplicate member request creates no second row")
+code, url, page = member_b.post({
+    "action": "staff-confirm-pickup", "id": str(member_id), "handoff_confirmed": "yes"
+}, "progress")
+ok(code == 403 and status(member_id) == "ready", "member cannot impersonate staff handoff")
+code, url, page = admin.post({
+    "action": "staff-confirm-pickup", "id": str(member_id), "handoff_confirmed": "yes"
+}, "order", id=str(member_id))
+ok(status(member_id) == "picked_up", "staff finalizes member handoff after request")
+code, url, page = admin.post({
+    "action": "staff-confirm-pickup", "id": str(member_id), "handoff_confirmed": "yes"
+}, "order", id=str(member_id))
+ok(status(member_id) == "picked_up", "duplicate staff confirmation leaves final status")
 ok(count("SELECT COUNT(*) FROM laundry__status_history_tbl "
          "WHERE order_id=%d AND new_status='picked_up'" % member_id) == 1,
-   "duplicate pickup creates no duplicate history")
+   "duplicate staff confirmation creates no duplicate history")
 
 print("ALL FINAL SYSTEM HTTP SMOKE TESTS PASSED: %d checks" % total)

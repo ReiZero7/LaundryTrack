@@ -385,7 +385,12 @@ function process_action(): never {
                 $orderId = $stmt->fetchColumn();
                 if (!$orderId) { flash('ลิงก์หมดอายุหรือไม่ถูกต้อง', 'error'); go('home'); }
                 session_regenerate_id(true);
-                unset($_SESSION['guest_pickup_claim']);
+                // Scanning the SAME QR again must not erase the session-bound request proof.
+                $claim = $_SESSION['guest_pickup_claim'] ?? null;
+                if (!is_array($claim) || ($claim['order_id'] ?? null) !== (int)$orderId
+                    || !hash_equals((string)($claim['token_hash'] ?? ''), $tokenHash)) {
+                    unset($_SESSION['guest_pickup_claim']);
+                }
                 $_SESSION['guest_track'] = ['order_id' => (int)$orderId, 'token_hash' => $tokenHash];
                 $_SESSION['csrf'] = bin2hex(random_bytes(32));
                 go('track-portal');
@@ -399,62 +404,111 @@ function process_action(): never {
                 flash('ออกจากโหมดติดตามแล้ว');
                 go('home');
             case 'guest-confirm-pickup':
+                // QR bearer may REQUEST handoff, but cannot finalize the order.
                 if (current_user()) { http_response_code(403); exit('Forbidden'); }
                 $guestOrder = guest_tracking_order();
-                if (!$guestOrder) { unset($_SESSION['guest_track']); flash('สิทธิ์ติดตามหมดอายุ', 'error'); go('home'); }
+                if (!$guestOrder) { unset($_SESSION['guest_track'], $_SESSION['guest_pickup_claim']); flash('สิทธิ์ติดตามหมดอายุ', 'error'); go('home'); }
+                $orderId = (int)$guestOrder['id'];
                 $pdo = db();
                 $pdo->beginTransaction();
                 try {
-                    $stmt = $pdo->prepare("UPDATE laundry__orders_tbl
-                        SET status='picked_up'
-                        WHERE id=? AND tracking_token_hash=? AND status='ready'");
-                    $stmt->execute([(int)$guestOrder['id'], $_SESSION['guest_track']['token_hash']]);
-                    if ($stmt->rowCount() !== 1) throw new DomainException('Order is not ready');
-                    $pdo->prepare("INSERT INTO laundry__status_history_tbl
-                        (order_id,changed_by,old_status,new_status,note)
-                        VALUES(?,?,'ready','picked_up',?)")
-                        ->execute([(int)$guestOrder['id'],(int)$guestOrder['customer_id'],'ลูกค้าหน้าร้านยืนยันรับผ้าผ่านลิงก์ติดตาม']);
+                    $stmt = $pdo->prepare("SELECT status FROM laundry__orders_tbl
+                        WHERE id=? AND tracking_token_hash=? FOR UPDATE");
+                    $stmt->execute([$orderId, $_SESSION['guest_track']['token_hash']]);
+                    if ($stmt->fetchColumn() !== 'ready') throw new DomainException('Order is not ready');
+                    $existing = $pdo->prepare('SELECT requested_source FROM laundry__pickup_requests_tbl WHERE order_id=?');
+                    $existing->execute([$orderId]);
+                    if ($existing->fetchColumn() !== false) {
+                        $pdo->commit();
+                        flash('มีคำขอรับผ้านี้อยู่แล้ว กรุณารอพนักงานตรวจสอบ');
+                        go('track-portal');
+                    }
+                    $pdo->prepare("INSERT INTO laundry__pickup_requests_tbl
+                        (order_id,requested_source,requested_by) VALUES(?,'guest',?)")
+                        ->execute([$orderId,(int)$guestOrder['customer_id']]);
                     $pdo->commit();
-                    // Only this guest session can later attach the completed order.
+                    // Only the requesting browser can claim after staff approval, not QR alone.
                     $_SESSION['guest_pickup_claim'] = [
-                        'order_id' => (int)$guestOrder['id'],
+                        'order_id' => $orderId,
                         'token_hash' => (string)$_SESSION['guest_track']['token_hash'],
-                        'confirmed_at' => time(),
+                        'requested_at' => time(),
                     ];
-                    flash('ยืนยันรับผ้าเรียบร้อย');
+                    flash('ส่งคำขอรับผ้าแล้ว กรุณาให้พนักงานตรวจสอบและยืนยันส่งมอบ');
                     go('track-portal');
                 } catch (Throwable $e) {
                     if ($pdo->inTransaction()) $pdo->rollBack();
-                    if ($e instanceof DomainException) { flash('ออร์เดอร์ยังไม่พร้อมรับหรือยืนยันไปแล้ว', 'error'); go('track-portal'); }
+                    if ($e instanceof DomainException) { flash('ออร์เดอร์ยังไม่พร้อมรับหรือมีการส่งมอบไปแล้ว', 'error'); go('track-portal'); }
                     throw $e;
                 }
             case 'order-confirm-pickup':
                 require_login();
-                // Only a customer can confirm their own ready order.
+                // Members may request pickup of their OWN ready order only.
                 if (is_admin()) { http_response_code(403); exit('Forbidden'); }
                 $orderId = post_int('id');
                 if ($orderId < 1) { flash('หมายเลขออร์เดอร์ไม่ถูกต้อง', 'error'); go('orders'); }
-
                 $pdo = db();
                 $pdo->beginTransaction();
                 try {
-                    // Atomic conditional update prevents other customers and duplicate confirmations.
-                    $stmt = $pdo->prepare("UPDATE laundry__orders_tbl SET status='picked_up' WHERE id=? AND customer_id=? AND status='ready'");
+                    $stmt = $pdo->prepare('SELECT status FROM laundry__orders_tbl WHERE id=? AND customer_id=? FOR UPDATE');
                     $stmt->execute([$orderId, current_user()['id']]);
-                    if ($stmt->rowCount() !== 1) throw new DomainException('Order not ready or not owned by customer');
-
-                    $pdo->prepare("INSERT INTO laundry__status_history_tbl(order_id,changed_by,old_status,new_status,note) VALUES(?,?,'ready','picked_up',?)")
-                        ->execute([$orderId, current_user()['id'], 'ลูกค้ายืนยันว่าได้รับผ้าแล้ว']);
-
+                    if ($stmt->fetchColumn() !== 'ready') throw new DomainException('Order not ready or not owned');
+                    $existing = $pdo->prepare('SELECT order_id FROM laundry__pickup_requests_tbl WHERE order_id=?');
+                    $existing->execute([$orderId]);
+                    if ($existing->fetchColumn() !== false) {
+                        $pdo->commit();
+                        flash('มีคำขอรับผ้านี้อยู่แล้ว กรุณารอพนักงานตรวจสอบ');
+                        go('order', ['id' => $orderId]);
+                    }
+                    $pdo->prepare("INSERT INTO laundry__pickup_requests_tbl
+                        (order_id,requested_source,requested_by) VALUES(?,'member',?)")
+                        ->execute([$orderId, (int)current_user()['id']]);
                     $pdo->commit();
-                    flash('ยืนยันรับผ้าเรียบร้อย ขอบคุณที่ใช้บริการ');
+                    flash('ส่งคำขอรับผ้าแล้ว กรุณาให้พนักงานตรวจสอบและยืนยันส่งมอบ');
                     go('order', ['id' => $orderId]);
                 } catch (Throwable $e) {
                     if ($pdo->inTransaction()) $pdo->rollBack();
                     if ($e instanceof DomainException) {
-                        flash('ไม่สามารถยืนยันรับผ้าได้ กรุณาตรวจสอบสถานะออร์เดอร์ของคุณ', 'error');
+                        flash('ไม่สามารถขอรับผ้าได้ กรุณาตรวจสอบสถานะออร์เดอร์ของคุณ', 'error');
                         go('orders');
                     }
+                    throw $e;
+                }
+            case 'staff-confirm-pickup':
+                // Only authenticated staff can finalize the physical handoff.
+                require_admin();
+                $orderId = post_int('id');
+                if ($orderId < 1) { flash('ออร์เดอร์ไม่ถูกต้อง', 'error'); go('orders'); }
+                if (post_string('handoff_confirmed') !== 'yes') {
+                    flash('ต้องตรวจสอบและยืนยันว่าส่งมอบผ้าจริงก่อนปิดออร์เดอร์', 'error');
+                    go('order', ['id' => $orderId]);
+                }
+                $pdo = db();
+                $pdo->beginTransaction();
+                try {
+                    // Lock order first, matching guest/member request lock ordering.
+                    $stmt = $pdo->prepare('SELECT status FROM laundry__orders_tbl WHERE id=? FOR UPDATE');
+                    $stmt->execute([$orderId]);
+                    if ($stmt->fetchColumn() !== 'ready') throw new DomainException('Order is not ready');
+                    $stmt = $pdo->prepare('SELECT requested_at,confirmed_at FROM laundry__pickup_requests_tbl WHERE order_id=? FOR UPDATE');
+                    $stmt->execute([$orderId]);
+                    $pickup = $stmt->fetch();
+                    if (!$pickup || $pickup['confirmed_at'] !== null) throw new DomainException('No pending pickup request');
+                    $stmt = $pdo->prepare("UPDATE laundry__orders_tbl SET status='picked_up' WHERE id=? AND status='ready'");
+                    $stmt->execute([$orderId]);
+                    if ($stmt->rowCount() !== 1) throw new DomainException('Order changed');
+                    $stmt = $pdo->prepare('UPDATE laundry__pickup_requests_tbl SET confirmed_at=CURRENT_TIMESTAMP,confirmed_by=? WHERE order_id=? AND confirmed_at IS NULL');
+                    $stmt->execute([(int)current_user()['id'], $orderId]);
+                    if ($stmt->rowCount() !== 1) throw new DomainException('Pickup already verified');
+                    $pdo->prepare("INSERT INTO laundry__status_history_tbl
+                        (order_id,changed_by,old_status,new_status,note)
+                        VALUES(?,?,'ready','picked_up',?)")
+                        ->execute([$orderId,(int)current_user()['id'],'พนักงานตรวจสอบและยืนยันส่งมอบผ้าจริง']);
+                    $pdo->commit();
+                    flash('พนักงานยืนยันส่งมอบผ้าและปิดออร์เดอร์เรียบร้อย');
+                    go('order', ['id' => $orderId]);
+                } catch (Throwable $e) {
+                    if ($pdo->inTransaction()) $pdo->rollBack();
+                    if ($e instanceof DomainException) { flash('ไม่สามารถปิดออร์เดอร์ได้ ต้องมีคำขอรับผ้าและยังไม่ถูกส่งมอบ', 'error'); go('order', ['id' => $orderId]); }
                     throw $e;
                 }
             case 'order-status':
@@ -466,7 +520,7 @@ function process_action(): never {
                     'received' => ['washing', 'cancelled'],
                     'washing' => ['drying'],
                     'drying' => ['ready'],
-                    // Customer alone confirms ready -> picked_up.
+                    // Only staff-confirm-pickup can finalize ready -> picked_up.
                     'picked_up' => [],
                     'cancelled' => [],
                 ];
