@@ -46,7 +46,7 @@ function process_action(): never {
                 session_regenerate_id(true);
                 unset($user['password_hash']);
                 $_SESSION['user'] = $user;
-                unset($_SESSION['guest_track']);
+                unset($_SESSION['guest_track'], $_SESSION['guest_pickup_claim']);
                 $_SESSION['csrf'] = bin2hex(random_bytes(32));
                 flash('เข้าสู่ระบบสำเร็จ');
                 go(($user['role'] === 'customer') ? $nextPage : 'dashboard');
@@ -210,7 +210,7 @@ function process_action(): never {
                         go('order', ['id' => $orderId]);
                     }
                     $_SESSION['last_public_order_at'] = time();
-                    unset($_SESSION['guest_track']);
+                    unset($_SESSION['guest_track'], $_SESSION['guest_pickup_claim']);
                     $_SESSION['new_self_order'] = [
                         'order_id' => $orderId,
                         'customer_id' => $customerId,
@@ -262,7 +262,7 @@ function process_action(): never {
                     $stmt->execute([$accountId, $pending['order_id'], $pending['customer_id'], $pending['token_hash']]);
                     if ($stmt->rowCount() !== 1) throw new DomainException('Order transfer failed');
                     $pdo->commit();
-                    unset($_SESSION['new_self_order'], $_SESSION['guest_track']);
+                    unset($_SESSION['new_self_order'], $_SESSION['guest_track'], $_SESSION['guest_pickup_claim']);
                     session_regenerate_id(true);
                     $_SESSION['csrf'] = bin2hex(random_bytes(32));
                     $_SESSION['user'] = ['id' => $accountId, 'full_name' => $guest['full_name'], 'email' => $email, 'role' => 'customer'];
@@ -379,11 +379,12 @@ function process_action(): never {
                 $orderId = $stmt->fetchColumn();
                 if (!$orderId) { flash('ลิงก์หมดอายุหรือไม่ถูกต้อง', 'error'); go('home'); }
                 session_regenerate_id(true);
+                unset($_SESSION['guest_pickup_claim']);
                 $_SESSION['guest_track'] = ['order_id' => (int)$orderId, 'token_hash' => $tokenHash];
                 $_SESSION['csrf'] = bin2hex(random_bytes(32));
                 go('track-portal');
             case 'guest-track-logout':
-                unset($_SESSION['guest_track']);
+                unset($_SESSION['guest_track'], $_SESSION['guest_pickup_claim']);
                 $_SESSION['csrf'] = bin2hex(random_bytes(32));
                 session_regenerate_id(true);
                 flash('ออกจากโหมดติดตามแล้ว');
@@ -405,6 +406,12 @@ function process_action(): never {
                         VALUES(?,?,'ready','picked_up',?)")
                         ->execute([(int)$guestOrder['id'],(int)$guestOrder['customer_id'],'ลูกค้าหน้าร้านยืนยันรับผ้าผ่านลิงก์ติดตาม']);
                     $pdo->commit();
+                    // Only this guest session can later attach the completed order.
+                    $_SESSION['guest_pickup_claim'] = [
+                        'order_id' => (int)$guestOrder['id'],
+                        'token_hash' => (string)$_SESSION['guest_track']['token_hash'],
+                        'confirmed_at' => time(),
+                    ];
                     flash('ยืนยันรับผ้าเรียบร้อย');
                     go('track-portal');
                 } catch (Throwable $e) {
