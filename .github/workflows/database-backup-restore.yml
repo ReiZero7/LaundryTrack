@@ -1,0 +1,126 @@
+name: Database backup and isolated restore drill
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  backup-restore:
+    name: MySQL backup, checksum and restore into separate CI schema
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: ci-local-only
+          MYSQL_DATABASE: laundrytrack_ci
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_mysql
+          coverage: none
+      - name: Verify MySQL backup and restore clients
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v mysql
+          command -v mysqldump
+          mysql --version
+          mysqldump --version
+      - name: Create disposable private DB credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            printf '%s\n' 'APP_ENV=ci' 'DB_HOST=127.0.0.1' 'DB_PORT=3306' \
+              'DB_NAME=laundrytrack_ci' 'DB_USER=root' 'DB_PASS=ci-local-only'
+          } > laundrytrack_private/.env
+          chmod 600 laundrytrack_private/.env
+      - name: Create isolated fixture with representative data
+        shell: bash
+        run: |
+          set -euo pipefail
+          MYSQL_PWD=ci-local-only mysql -h 127.0.0.1 -P 3306 -u root laundrytrack_ci \
+            < tests/fixtures/final-system-base.sql
+          MYSQL_PWD=ci-local-only mysql -h 127.0.0.1 -P 3306 -u root laundrytrack_ci \
+            < laundrytrack_private/migrations/2026-11-11_order_rate_limiting.sql
+          MYSQL_PWD=ci-local-only mysql -h 127.0.0.1 -P 3306 -u root laundrytrack_ci -e "
+            INSERT INTO laundry__users_tbl
+              (id,full_name,email,phone,password_hash,role)
+            VALUES
+              (1,'Backup CI member','ci-member@example.test',NULL,'not-a-real-hash','customer'),
+              (2,'Backup CI guest',NULL,NULL,'not-a-real-hash','customer');
+            INSERT INTO laundry__orders_tbl
+              (id,order_no,customer_id,created_by,due_at,total_amount,notes,status)
+            VALUES
+              (1,'LT-BACKUP-CI-1',1,1,'2026-12-01 12:00:00',70.00,'CI-only fixture','requested');
+            INSERT INTO laundry__order_items_tbl
+              (order_id,service_id,quantity,unit_price,subtotal)
+            VALUES (1,1,2.00,35.00,70.00);
+            INSERT INTO laundry__status_history_tbl
+              (order_id,changed_by,old_status,new_status,note)
+            VALUES (1,1,NULL,'requested','CI only');
+            INSERT INTO laundry__order_rate_limits_tbl
+              (scope,identity_hash,window_started_at,attempt_count)
+            VALUES ('member-15m',REPEAT('a',64),1000000000,3);
+          "
+      - name: Produce private SQL backup and verify SHA256
+        shell: bash
+        run: |
+          set -euo pipefail
+          php laundrytrack_private/scripts/backup_database.php > /tmp/laundrytrack-backup-result.txt
+          cat /tmp/laundrytrack-backup-result.txt
+          backup_file="$(sed -n 's/^File: //p' /tmp/laundrytrack-backup-result.txt)"
+          if [ -z "$backup_file" ] || [ ! -f "$backup_file" ]; then
+            echo 'No backup file was created'
+            exit 1
+          fi
+          test "$(stat -c '%a' "$backup_file")" = '600'
+          test "$(stat -c '%a' "$(dirname "$backup_file")")" = '700'
+          (
+            cd "$(dirname "$backup_file")"
+            sha256sum --check "$(basename "$backup_file").sha256"
+          )
+          printf '%s\n' "$backup_file" > /tmp/laundrytrack-ci-backup-file
+      - name: Restore ONLY into a different CI database and compare records
+        shell: bash
+        env:
+          APP_ENV: ci
+        run: |
+          set -euo pipefail
+          test "$APP_ENV" = 'ci'
+          test "$(sed -n 's/^DB_NAME=//p' laundrytrack_private/.env)" = 'laundrytrack_ci'
+          restored_db='laundrytrack_restore_ci'
+          test "$restored_db" != 'laundrytrack_ci'
+          MYSQL_PWD=ci-local-only mysql -h 127.0.0.1 -P 3306 -u root \
+            -e 'CREATE DATABASE laundrytrack_restore_ci CHARACTER SET utf8mb4'
+          backup_file="$(cat /tmp/laundrytrack-ci-backup-file)"
+          MYSQL_PWD=ci-local-only mysql -h 127.0.0.1 -P 3306 -u root "$restored_db" < "$backup_file"
+          for table in users services orders order_items status_history order_rate_limits; do
+            actual="laundry__$table""_tbl"
+            original_count="$(MYSQL_PWD=ci-local-only mysql -N -B -h 127.0.0.1 -u root laundrytrack_ci -e "SELECT COUNT(*) FROM \`$actual\`")"
+            restored_count="$(MYSQL_PWD=ci-local-only mysql -N -B -h 127.0.0.1 -u root "$restored_db" -e "SELECT COUNT(*) FROM \`$actual\`")"
+            if [ "$original_count" != "$restored_count" ]; then
+              echo "MISMATCH: $actual source=$original_count restored=$restored_count"
+              exit 1
+            fi
+            echo "RESTORE OK: $actual rows=$restored_count"
+          done
+          MYSQL_PWD=ci-local-only mysql -N -B -h 127.0.0.1 -u root "$restored_db" \
+            -e "SELECT order_no,total_amount,status FROM laundry__orders_tbl WHERE id=1" \
+            | grep -q $'LT-BACKUP-CI-1\t70.00\trequested'
+          echo 'BACKUP / SHA256 / ISOLATED RESTORE VERIFICATION PASSED'
