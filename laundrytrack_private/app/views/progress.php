@@ -2,10 +2,10 @@
 require_login();
 if (is_admin()) go('dashboard');
 $customerId = (int)current_user()['id'];
-$stmt = db()->prepare("SELECT id,order_no,status,due_at,total_amount,received_at
-    FROM laundry__orders_tbl
-    WHERE customer_id=? AND status NOT IN ('picked_up','cancelled')
-    ORDER BY id DESC LIMIT 8");
+$stmt = db()->prepare("SELECT o.id,o.order_no,o.status,o.due_at,o.total_amount,o.received_at,pr.requested_at AS pickup_requested_at
+    FROM laundry__orders_tbl o LEFT JOIN laundry__pickup_requests_tbl pr ON pr.order_id=o.id
+    WHERE o.customer_id=? AND o.status NOT IN ('picked_up','cancelled')
+    ORDER BY o.id DESC LIMIT 8");
 $stmt->execute([$customerId]);
 $activeOrders = $stmt->fetchAll();
 $stmt = db()->prepare("SELECT id,order_no,status,due_at,total_amount,received_at
@@ -67,13 +67,13 @@ $steps = [
                 <?php if ($o['status'] === 'requested'): ?>
                 <p class="member-progress-guidance" data-progress-guidance>กรุณานำผ้ามาส่งที่ร้าน เมื่อพนักงานตรวจรับแล้วสถานะจะอัปเดต</p>
                 <?php elseif ($o['status'] === 'ready'): ?>
-                <p class="member-progress-guidance" data-progress-guidance>🔔 ผ้าพร้อมรับแล้ว กรุณารับผ้าและยืนยันในหน้ารายละเอียด</p>
+                <p class="member-progress-guidance" data-progress-guidance><?= $o['pickup_requested_at'] ? '✓ แจ้งขอรับผ้าแล้ว กรุณารอพนักงานยืนยันการส่งมอบ' : '🔔 ผ้าพร้อมรับแล้ว กรุณาดูรายละเอียดเพื่อแจ้งขอรับผ้า' ?></p>
                 <?php else: ?>
                 <p class="member-progress-guidance" data-progress-guidance>ระบบอัปเดตความคืบหน้าทุกประมาณ 30 วินาทีขณะเปิดเว็บไซต์</p>
                 <?php endif; ?>
                 <div class="member-progress-foot">
                     <span>กำหนดรับประมาณ <?= e(date('d/m/Y H:i', strtotime($o['due_at']))) ?></span>
-                    <a class="btn btn-primary" href="<?= e(url('order', ['id' => (int)$o['id']])) ?>">ดูรายละเอียด<?= $o['status'] === 'ready' ? ' / ยืนยันรับผ้า' : '' ?></a>
+                    <a class="btn btn-primary" href="<?= e(url('order', ['id' => (int)$o['id']])) ?>">ดูรายละเอียด<?= $o['status'] === 'ready' ? ' / แจ้งขอรับผ้า' : '' ?></a>
                 </div>
             </article>
         <?php endforeach; ?>
