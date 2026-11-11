@@ -21,8 +21,8 @@
    SHOW COLUMNS FROM laundry__status_history_tbl LIKE 'new_status';
    ```
 
-3. The SQL migration file assumes the original columns are ENUM over the six existing statuses, with `orders.status NOT NULL DEFAULT 'received'`, `history.old_status NULL` and `history.new_status NOT NULL`. If the original types or defaults differ, **STOP and adjust the migration**. Test on a cloned DB. MySQL DDL auto-commits.
-4. Only then apply `laundrytrack_private/migrations/2026-11-11_requested_order_status.sql` once. It widens the order and history enums before backfilling outstanding self-service requests. It deliberately leaves staff-created orders and already-progressing or completed orders untouched.
+3. **Verified on the target DB `s68160395`**: `orders.status` is `ENUM NOT NULL DEFAULT 'received'`; `status_history.old_status` is `VARCHAR(20) NULL`; `status_history.new_status` is `VARCHAR(20) NOT NULL`. The earlier migration assumption about history ENUMs was incorrect and has been corrected. **Do not alter the history columns.** The full old ENUM list was truncated in the UI, so the migration now reads the actual `COLUMN_TYPE` from `information_schema` and adds `'requested'` while retaining all existing enum values. If schema differs or requested already exists, stop and review instead of rerunning. Test on a cloned DB. MySQL DDL auto-commits.
+4. Only then apply `laundrytrack_private/migrations/2026-11-11_requested_order_status.sql` once. It expands **only the orders.status ENUM**, then performs a guarded backfill of outstanding self-service requests. Staff-created, progressing or completed orders remain untouched.
 5. Verify `SHOW COLUMNS` and `SELECT status,COUNT(*) ... GROUP BY status`.
 6. Deploy the new PHP files and assets from the PR **after** the migration. Do not deploy the code first: it would try writing `requested` before the database accepts that state.
 7. On Angsila, check `php -l` on all changed PHP files. Protect private files; ensure web-readable asset directories and published JS/CSS do not inherit `umask 077` permissions. Hard-refresh CSS/JS due to browser caching.
