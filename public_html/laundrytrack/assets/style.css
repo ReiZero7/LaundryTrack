@@ -97,3 +97,49 @@ body{background:radial-gradient(circle at 92% 14%,#d5f3fa 0,transparent 30%),rad
 .self-service-shop-panel{margin-bottom:20px}
 .anti-bot-field{position:absolute!important;left:-10000px!important;width:1px!important;height:1px!important;overflow:hidden!important}
 @media(max-width:760px){.self-start-options{grid-template-columns:1fr}.self-start-card{padding:20px}.self-after-actions>*{flex:1 1 100%}}
+
+/* Member-first progress screen. No executive dashboard for customers. */
+.member-progress-page{display:grid;gap:24px}
+.member-progress-hero{border-radius:24px;padding:34px 36px;background:linear-gradient(130deg,#e0f7ef,#eef9ff 64%,#e9f4ff);border:1px solid #c9e9e0}
+.member-progress-hero h1{font-size:clamp(26px,4vw,42px);line-height:1.22;margin:6px 0 10px;color:#12584f}
+.member-progress-hero p{color:#3c6d67}
+.member-progress-hero-actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:22px}
+.member-progress-intro{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.member-progress-intro h2{margin:0;font-size:23px}
+.member-progress-intro>span{color:#607c77}
+.member-progress-list{display:grid;gap:22px}
+.member-progress-card{padding:28px;border:1px solid #b9e1d4;box-shadow:0 10px 35px rgba(10,82,68,.06)}
+.member-progress-card:first-child{border:2px solid #58bda2}
+.member-progress-card-head{display:flex;justify-content:space-between;gap:12px;align-items:start;margin-bottom:22px}
+.member-progress-card-head h2{margin:4px 0 0;overflow-wrap:anywhere;font-size:22px}
+.member-progress-highlight{display:flex;justify-content:space-between;align-items:baseline;gap:14px;background:#f2fbf8;border-radius:14px;padding:16px;margin:12px 0}
+.member-progress-highlight-title{display:grid;gap:3px}
+.member-progress-highlight-title>span{font-size:13px;color:#557d71}
+.member-progress-highlight-title>strong{font-size:clamp(20px,3vw,28px);color:#137965}
+.member-progress-highlight>span{font-size:13px;color:#557d71}
+.member-progress-track{height:12px;background:#dcece8;border-radius:100px;overflow:hidden;margin:18px 0 22px}
+.member-progress-track-fill{height:100%;background:linear-gradient(90deg,#1b967b,#45c9ac);border-radius:inherit;transition:width .35s ease;width:0}
+.member-progress-track-fill.stage-0{width:0}.member-progress-track-fill.stage-1{width:16.6667%}
+.member-progress-track-fill.stage-2{width:33.3333%}.member-progress-track-fill.stage-3{width:50%}
+.member-progress-track-fill.stage-4{width:66.6667%}.member-progress-track-fill.stage-5{width:83.3333%}
+.member-progress-track-fill.stage-6{width:100%}
+.member-step-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));padding:0;margin:0;list-style:none;gap:7px}
+.member-progress-step{display:grid;justify-items:center;text-align:center;align-content:start;gap:8px;color:#718681;font-size:12px}
+.member-step-dot{display:grid;place-items:center;width:30px;height:30px;background:#edf3f1;border:1px solid #d4e1dd;border-radius:50%;font-weight:700;color:#78908a}
+.member-progress-step.completed .member-step-dot{background:#d9f6eb;color:#12826d;border-color:#70cdb5}
+.member-progress-step.current .member-step-dot{background:#128c76;color:white;border-color:#128c76;box-shadow:0 0 0 4px #cef4e7}
+.member-progress-step.current{color:#126655;font-weight:700}
+.member-progress-guidance{padding:12px 15px;background:#f7faf9;border-left:3px solid #69bbaa;border-radius:6px;margin-top:24px;color:#3c6d67}
+.member-progress-foot{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-top:18px}
+.member-progress-foot>span{font-size:13px;color:#55726d}
+.member-empty-progress{text-align:center;padding:46px}
+.member-progress-empty-icon{font-size:52px}
+.member-recent-history{margin-top:4px}
+.member-history-list{display:grid;gap:8px}
+.member-history-entry{display:flex;justify-content:space-between;align-items:center;gap:10px;text-decoration:none;padding:14px;background:#f5faf8;border-radius:10px}
+.member-history-entry>span:first-child{display:grid;gap:4px}
+.member-history-entry small{color:#6b807c}
+@media(max-width:760px){.member-progress-hero{padding:25px 20px}.member-progress-card{padding:17px}
+.member-step-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.member-progress-card-head{flex-wrap:wrap}.member-progress-foot>.btn{width:100%;text-align:center}
+.member-progress-hero-actions>*{flex:1 1 100%}}
