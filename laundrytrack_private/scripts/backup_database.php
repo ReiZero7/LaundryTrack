@@ -21,6 +21,8 @@ $previousUmask = umask(0077);
 $optionFile = null;
 $partialFile = null;
 $finalFile = null;
+$checksumPath = null;
+$completed = false;
 
 try {
     $database = setting('DB_NAME');
@@ -137,6 +139,7 @@ try {
     }
     chmod($checksumPath, 0600);
 
+    $completed = true;
     fwrite(STDOUT, "BACKUP OK\n");
     fwrite(STDOUT, 'Database: ' . $database . "\n");
     fwrite(STDOUT, 'File: ' . $finalFile . "\n");
@@ -145,9 +148,14 @@ try {
     fwrite(STDOUT, "Restore has NOT been performed. Do not share this SQL file publicly.\n");
 } catch (Throwable $e) {
     fwrite(STDERR, "BACKUP FAILED: " . $e->getMessage() . "\n");
-    exit(1);
 } finally {
     if (is_string($optionFile) && is_file($optionFile)) @unlink($optionFile);
     if (is_string($partialFile) && is_file($partialFile)) @unlink($partialFile);
+    if (!$completed) {
+        if (is_string($checksumPath) && is_file($checksumPath)) @unlink($checksumPath);
+        if (is_string($finalFile) && is_file($finalFile)) @unlink($finalFile);
+    }
     umask($previousUmask);
 }
+
+if (!$completed) exit(1);
