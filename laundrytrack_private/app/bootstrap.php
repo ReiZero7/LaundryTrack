@@ -130,6 +130,64 @@ function tracking_hash(string $token): ?string {
     // Exactly 32 random bytes in lowercase hex. No order IDs as auth secrets.
     return preg_match('/^[a-f0-9]{64}$/D', $token) ? hash('sha256', $token) : null;
 }
+
+/**
+ * Customer email verification: raw token is only used in email; DB stores SHA-256.
+ * Do not return or log the token in normal web requests.
+ */
+function email_verification_hash(string $token): ?string {
+    return preg_match('/^[a-f0-9]{64}$/D', $token) ? hash('sha256', $token) : null;
+}
+function create_email_verification(PDO $pdo, int $userId, ?array $claim = null): string {
+    $token = bin2hex(random_bytes(32));
+    $stmt = $pdo->prepare("INSERT INTO laundry__email_verifications_tbl
+        (user_id,token_hash,expires_at,sent_at,send_count,send_window_started_at,
+         claimed_order_id,claimed_customer_id,claimed_token_hash)
+        VALUES(?, ?, UTC_TIMESTAMP() + INTERVAL 24 HOUR, UTC_TIMESTAMP(), 1,
+               UTC_TIMESTAMP(), ?, ?, ?)");
+    $stmt->execute([
+        $userId, email_verification_hash($token),
+        $claim['order_id'] ?? null, $claim['customer_id'] ?? null,
+        $claim['token_hash'] ?? null,
+    ]);
+    return $token;
+}
+function email_verification_link(string $token): string {
+    // Fixed deployment origin prevents Host-header injection.
+    return 'https://angsila.informatics.buu.ac.th/~68160395/laundrytrack/index.php?page=verify-email&token='
+        . rawurlencode($token);
+}
+function send_email_verification(string $email, string $token): bool {
+    // CI tests can inspect the generated token, but never over HTTP or on prod.
+    if (PHP_SAPI === 'cli' && setting('APP_ENV') === 'ci') {
+        $GLOBALS['laundry_ci_verification_token'] = $token;
+        return true;
+    }
+    $sender = setting('MAIL_FROM_ADDRESS');
+    if (!filter_var($sender, FILTER_VALIDATE_EMAIL) ||
+        !filter_var($email, FILTER_VALIDATE_EMAIL) ||
+        strpbrk($sender . $email, "\r\n") !== false) {
+        error_log('[LaundryTrack] Verification email sender is not configured');
+        return false;
+    }
+    $subject = 'LaundryTrack: Verify your email';
+    $message = "Please confirm your LaundryTrack email address.\n\n"
+        . "Open this link and press Confirm (expires in 24 hours):\n"
+        . email_verification_link($token) . "\n\n"
+        . "If you did not request this account, ignore the message.\n";
+    $headers = "From: " . $sender . "\r\n"
+        . "Content-Type: text/plain; charset=UTF-8\r\n"
+        . "MIME-Version: 1.0\r\n";
+    try {
+        $ok = mail($email, $subject, $message, $headers);
+        if (!$ok) error_log('[LaundryTrack] PHP mail() could not hand off verification email');
+        return $ok;
+    } catch (Throwable $e) {
+        error_log('[LaundryTrack] PHP mail transport unavailable: ' . get_class($e));
+        return false;
+    }
+}
+
 function shop_order_link(): string {
     return 'https://angsila.informatics.buu.ac.th/~68160395/laundrytrack/index.php?page=order-start';
 }
