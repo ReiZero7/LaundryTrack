@@ -15,9 +15,7 @@ function process_action(): never {
                 $name = post_string('full_name');
                 $email = strtolower(post_string('email'));
                 $phone = post_string('phone');
-                $password = post_string('password');$password = is_string($_POST['password'] ?? null)
-                ? $_POST['password']
-                : '';
+                $password = is_string($_POST['password'] ?? null) ? $_POST['password'] : '';
                 if (text_length($name) < 2 || text_length($name) > 100 || !filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($email) > 150 || text_length($phone) > 20 || strlen($password) < 8) {
                     flash('กรอกชื่อ อีเมล และรหัสผ่านอย่างน้อย 8 ตัวอักษรให้ถูกต้อง', 'error'); go('register');
                 }
@@ -34,9 +32,17 @@ function process_action(): never {
                 // Whitelist internal destination; never accept a free-form redirect URL.
                 $nextPage = post_string('next') === 'self-order' ? 'self-order' : 'dashboard';
                 $email = strtolower(post_string('email'));
-                $password = is_string($_POST['password'] ?? null)
-    			? $_POST['password']
-    			: '';
+                $password = is_string($_POST['password'] ?? null) ? $_POST['password'] : '';
+                // Restrict both credential guessing and excessively large inputs.
+                // Keep the same failure message for unknown and incorrect accounts.
+                if (!login_rate_limit_allowed(substr($email, 0, 150))) {
+                    flash('มีการพยายามเข้าสู่ระบบมากเกินไปหรือระบบตรวจสอบยังไม่พร้อม กรุณาลองใหม่ภายหลัง', 'error');
+                    go('login', $nextPage === 'self-order' ? ['next' => 'self-order'] : []);
+                }
+                if (strlen($email) > 150 || strlen($password) > 4096) {
+                    flash('อีเมลหรือรหัสผ่านไม่ถูกต้อง', 'error');
+                    go('login', $nextPage === 'self-order' ? ['next' => 'self-order'] : []);
+                }
                 $stmt = db()->prepare('SELECT id, full_name, email, role, password_hash FROM laundry__users_tbl WHERE email = ? LIMIT 1');
                 $stmt->execute([$email]);
                 $user = $stmt->fetch();
@@ -46,6 +52,8 @@ function process_action(): never {
                 session_regenerate_id(true);
                 unset($user['password_hash']);
                 $_SESSION['user'] = $user;
+                $_SESSION['session_started_at'] = time();
+                $_SESSION['session_last_seen'] = time();
                 unset($_SESSION['guest_track'], $_SESSION['guest_pickup_claim']);
                 $_SESSION['csrf'] = bin2hex(random_bytes(32));
                 flash('เข้าสู่ระบบสำเร็จ');
@@ -392,6 +400,8 @@ function process_action(): never {
                     unset($_SESSION['guest_pickup_claim']);
                 }
                 $_SESSION['guest_track'] = ['order_id' => (int)$orderId, 'token_hash' => $tokenHash];
+                $_SESSION['session_started_at'] = time();
+                $_SESSION['session_last_seen'] = time();
                 $_SESSION['csrf'] = bin2hex(random_bytes(32));
                 go('track-portal');
             case 'guest-track-logout':
