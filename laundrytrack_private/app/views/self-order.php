@@ -21,7 +21,7 @@ $defaultDue = date('Y-m-d\\TH:i', strtotime('+2 days'));
         <label>เบอร์โทรศัพท์ <input name="phone" required minlength="8" maxlength="20" type="tel" autocomplete="tel" placeholder="เบอร์โทรสำหรับติดต่อเรื่องผ้า"></label>
     </div>
 <?php endif; ?>
-<label>วันที่คาดว่าจะนำผ้ามาส่ง / ต้องการรับผ้า
+<label>วันที่ต้องการรับผ้า (โดยประมาณ)
     <input type="datetime-local" name="due_at" required value="<?= e($defaultDue) ?>">
 </label>
 <div class="section-heading"><h2>เลือกบริการ</h2><p>ราคาประมาณการคำนวณจากรายการบริการและจำนวนที่เลือก</p></div>
