@@ -88,63 +88,19 @@ function process_action(): never {
                 go('verify-email-sent');
             case 'email-verify':
                 if (current_user()) go('dashboard');
-                $tokenHash = email_verification_hash(post_string('token'));
-                if ($tokenHash === null) {
-                    flash('ลิงก์ยืนยันไม่ถูกต้อง', 'error');
-                    go('verify-email-sent');
-                }
-                $pdo = db();
-                $pdo->beginTransaction();
                 try {
-                    $stmt = $pdo->prepare("SELECT v.user_id,v.claimed_order_id,v.claimed_customer_id,
-                            v.claimed_token_hash
-                        FROM laundry__email_verifications_tbl v
-                        JOIN laundry__users_tbl u ON u.id=v.user_id
-                        WHERE v.token_hash=? AND v.expires_at > UTC_TIMESTAMP()
-                          AND u.role='customer' AND u.email_verified_at IS NULL
-                        FOR UPDATE");
-                    $stmt->execute([$tokenHash]);
-                    $verify = $stmt->fetch();
-                    if (!$verify) throw new DomainException('Expired or already used email token');
-                    $pdo->prepare("UPDATE laundry__users_tbl SET email_verified_at=UTC_TIMESTAMP()
-                        WHERE id=? AND role='customer' AND email_verified_at IS NULL")
-                        ->execute([(int)$verify['user_id']]);
-                    $linkedOrder = null;
-                    $claimFailed = false;
-                    if ($verify['claimed_order_id'] !== null) {
-                        $stmt = $pdo->prepare("UPDATE laundry__orders_tbl
-                            SET customer_id=?,tracking_token_hash=NULL
-                            WHERE id=? AND customer_id=? AND tracking_token_hash=?");
-                        $stmt->execute([
-                            (int)$verify['user_id'], (int)$verify['claimed_order_id'],
-                            (int)$verify['claimed_customer_id'], $verify['claimed_token_hash'],
-                        ]);
-                        if ($stmt->rowCount() === 1) {
-                            $linkedOrder = (int)$verify['claimed_order_id'];
-                        } else {
-                            // Email verification is valid even if a QR was rotated or claimed.
-                            $claimFailed = true;
-                            error_log('[LaundryTrack] Email verified but guest order claim no longer available');
-                        }
-                    }
-                    $pdo->prepare('DELETE FROM laundry__email_verifications_tbl WHERE user_id=?')
-                        ->execute([(int)$verify['user_id']]);
-                    $pdo->commit();
-                    if ($claimFailed) {
-                        flash('ยืนยันอีเมลสำเร็จ แต่ไม่สามารถเชื่อมออร์เดอร์เดิมได้ กรุณาติดต่อร้าน', 'error');
-                    } elseif ($linkedOrder !== null) {
+                    $outcome = complete_email_verification(post_string('token'));
+                    if ($outcome === 'linked') {
                         flash('ยืนยันอีเมลและเชื่อมออร์เดอร์เรียบร้อย กรุณาเข้าสู่ระบบ');
+                    } elseif ($outcome === 'claim_unavailable') {
+                        flash('ยืนยันอีเมลสำเร็จ แต่ไม่สามารถเชื่อมออร์เดอร์เดิมได้ กรุณาติดต่อร้าน', 'error');
                     } else {
                         flash('ยืนยันอีเมลสำเร็จ กรุณาเข้าสู่ระบบ');
                     }
                     go('login');
-                } catch (Throwable $e) {
-                    if ($pdo->inTransaction()) $pdo->rollBack();
-                    if ($e instanceof DomainException) {
-                        flash('ลิงก์ยืนยันหมดอายุหรือถูกใช้งานแล้ว กรุณาขอลิงก์ใหม่', 'error');
-                        go('resend-verification');
-                    }
-                    throw $e;
+                } catch (DomainException $e) {
+                    flash('ลิงก์ยืนยันหมดอายุหรือถูกใช้งานแล้ว กรุณาขอลิงก์ใหม่', 'error');
+                    go('resend-verification');
                 }
             case 'login':
                 if (current_user()) go('dashboard');
