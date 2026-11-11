@@ -1,0 +1,1 @@
+<div class="empty-state"><h2>ไม่พบหน้าที่ต้องการ</h2><p>ลิงก์นี้ไม่ถูกต้องหรือหน้าเว็บถูกย้าย</p><a class="btn btn-primary" href="<?= e(url(current_user() ? 'dashboard' : 'home')) ?>">กลับหน้าแรก</a></div>
