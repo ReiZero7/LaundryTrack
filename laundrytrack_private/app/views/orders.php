@@ -2,7 +2,7 @@
 $admin = is_admin();
 $statusFilter = $_GET['status'] ?? '';
 $search = trim(is_string($_GET['q'] ?? null) ? $_GET['q'] : '');
-$validStatuses = ['received','washing','drying','ready','picked_up','cancelled'];
+$validStatuses = ['requested','received','washing','drying','ready','picked_up','cancelled'];
 $where = [];
 $params = [];
 if (!$admin) { $where[] = 'o.customer_id=?'; $params[] = current_user()['id']; }
