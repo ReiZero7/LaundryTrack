@@ -55,7 +55,7 @@ A guest's tracking QR alone must not be sufficient to attach a completed order t
 
 1. In guest session A, confirm an order from `ready` to `picked_up`; signup link appears; follow it and create a new account; history and revoked old QR verified.
 2. In a **different incognito session B**, open the **same** QR after pickup and enter guest portal: the signup button must **not** appear. A direct attempt to load `join-after-order` must show unavailable.
-3. In session A, after confirming pickup, click guest logout and reopen the QR: signup must no longer be possible from that session.
+3. Create a **separate** guest test order C (do not sign up yet), advance it to `ready`, confirm pickup, then click guest logout and reopen its QR in the same browser: signup must no longer be possible. Also try directly opening `?page=join-after-order`. Logout now invalidates `guest_track`, `guest_pickup_claim` **and** stale `new_self_order` in the same PHP session; a new QR tracking login cannot recreate the completion proof.
 4. Fresh guest checkout without pickup still offers the original immediate signup process.
 5. Test member order creation and admin status transitions as before.
 
