@@ -7,3 +7,7 @@
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Private DB backup artifacts: never commit customer data or checksums
+laundrytrack_backups/
+*.sql.sha256
