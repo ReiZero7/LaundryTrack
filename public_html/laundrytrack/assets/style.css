@@ -81,3 +81,7 @@ body{background:radial-gradient(circle at 92% 14%,#d5f3fa 0,transparent 30%),rad
 .guest-ready-message{background:#e7f8ef;border:1px solid #a6e4c4;color:#16634e;padding:16px;border-radius:12px;font-weight:700}
 #guest-pickup-form{margin:16px 0}
 @media(max-width:800px){.guest-tracking-grid{grid-template-columns:1fr}}
+
+/* Show the QR as its own full-width card within the order detail grid. */
+.detail-grid > .walkin-qr-panel{grid-column:1/-1}
+@media print{.walkin-qr-panel form,.walkin-qr-panel button{display:none!important}}
