@@ -33,7 +33,9 @@ $guestOrder = current_user() ? null : guest_tracking_order();
             <button class="btn btn-primary" type="submit">✓ ยืนยันว่าได้รับผ้าแล้ว</button>
         </form>
         <p class="muted">ลิงก์จาก QR เป็นสิทธิ์เข้าถึงเฉพาะออร์เดอร์นี้ อย่าแชร์ลิงก์หรือ QR ให้ผู้อื่น</p>
-        <?php if ($guestOrder['status'] === 'picked_up'): ?>
+        <?php if ($guestOrder['status'] === 'picked_up' && ($eligibleClaim = membership_claim()) !== null
+                  && $eligibleClaim['source'] === 'guest'
+                  && $eligibleClaim['order_id'] === (int)$guestOrder['id']): ?>
         <div class="self-after-order">
             <h3>รับผ้าเรียบร้อยแล้ว ต้องการสมัครสมาชิกไหม?</h3>
             <p>เก็บออร์เดอร์นี้ไว้เป็นประวัติในบัญชีสมาชิกใหม่ แม้รับผ้าคืนแล้วก็สมัครได้</p>
