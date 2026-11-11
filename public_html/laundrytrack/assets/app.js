@@ -190,6 +190,7 @@
   const badge = document.getElementById('guest-order-status');
   const message = document.getElementById('guest-ready-message');
   const confirmForm = document.getElementById('guest-pickup-form');
+  const pendingMessage = document.getElementById('guest-pickup-pending');
   let previousStatus = panel.dataset.initialStatus;
   let inFlight = false;
   let stopped = false;
@@ -230,7 +231,8 @@
         badge.className = 'status ' + classes[data.status];
       }
       if (message) message.hidden = data.status !== 'ready';
-      if (confirmForm) confirmForm.hidden = data.status !== 'ready';
+      if (confirmForm) confirmForm.hidden = data.status !== 'ready' || data.pickup_requested === true;
+      if (pendingMessage) pendingMessage.hidden = data.status !== 'ready' || data.pickup_requested !== true;
       if (previousStatus !== 'ready' && data.status === 'ready') showReadyToast();
       previousStatus = data.status;
     } catch (_) {
@@ -258,8 +260,8 @@
     received: 'ร้านได้รับผ้าแล้ว และจะเริ่มดำเนินการซักตามคิว',
     washing: 'กำลังซักผ้าของคุณ',
     drying: 'กำลังอบหรือตากผ้าของคุณ',
-    ready: '🔔 ผ้าพร้อมรับแล้ว กรุณารับผ้าและยืนยันในหน้ารายละเอียด',
-    picked_up: 'คุณยืนยันรับผ้าคืนแล้ว ขอบคุณที่ใช้บริการ',
+    ready: '🔔 ผ้าพร้อมรับแล้ว กรุณาดูรายละเอียดเพื่อแจ้งพนักงานว่าต้องการรับผ้า',
+    picked_up: 'พนักงานยืนยันการส่งมอบผ้าแล้ว ขอบคุณที่ใช้บริการ',
     cancelled: 'ออร์เดอร์นี้ถูกยกเลิก'
   };
   const classes = {
@@ -308,7 +310,9 @@
           if (dot) dot.textContent = step < item.stage ? '✓' : String(step);
         });
         const note = card.querySelector('[data-progress-guidance]');
-        if (note) note.textContent = guidance[item.status];
+        if (note) note.textContent = item.status === 'ready' && item.pickup_requested === true
+          ? '✓ แจ้งขอรับผ้าแล้ว กรุณารอพนักงานยืนยันการส่งมอบที่ร้าน'
+          : guidance[item.status];
       }
       if (changed) {
         let banner = document.getElementById('member-progress-changed');
