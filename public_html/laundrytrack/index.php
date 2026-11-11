@@ -50,6 +50,26 @@ try {
         );
         exit;
     }
+    if ($page === 'progress-feed') {
+        header('Content-Type: application/json; charset=utf-8');
+        header('Cache-Control: private, no-store, max-age=0');
+        header('X-Robots-Tag: noindex, nofollow');
+        if (!current_user()) { http_response_code(401); echo '{"error":"unauthorized"}'; exit; }
+        if (is_admin()) { http_response_code(403); echo '{"error":"customer_only"}'; exit; }
+        $stmt = db()->prepare("SELECT id,status FROM laundry__orders_tbl WHERE customer_id=? ORDER BY id DESC LIMIT 30");
+        $stmt->execute([(int)current_user()['id']]);
+        $out = [];
+        foreach ($stmt->fetchAll() as $order) {
+            $out[] = [
+                'id' => (int)$order['id'],
+                'status' => (string)$order['status'],
+                'label' => status_label((string)$order['status']),
+                'stage' => order_progress_stage((string)$order['status']),
+            ];
+        }
+        echo json_encode(['orders' => $out], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
     if (in_array($page, ['track', 'track-portal', 'track-feed'], true)) {
         header('Cache-Control: private, no-store, max-age=0');
         header('Referrer-Policy: no-referrer');
@@ -73,12 +93,13 @@ try {
         header('Referrer-Policy: no-referrer');
         header('X-Robots-Tag: noindex, nofollow');
     }
-    if (current_user() && in_array($page, ['home', 'login', 'register'], true)) go('dashboard');
+    if (current_user() && in_array($page, ['home', 'login', 'register'], true)) go(is_admin() ? 'dashboard' : 'progress');
+    if ($page === 'dashboard' && current_user() && !is_admin()) go('progress');
     $publicPages = ['home', 'login', 'register', 'track', 'track-portal', 'order-start', 'self-order', 'order-complete', 'join-after-order'];
     if (!in_array($page, $publicPages, true)) require_login();
     $adminOnly = ['services', 'customers', 'new-order'];
     if (in_array($page, $adminOnly, true)) require_admin();
-    $allowed = ['home','login','register','dashboard','services','customers','new-order','orders','order','track','track-portal','order-start','self-order','order-complete','join-after-order'];
+    $allowed = ['home','login','register','dashboard','services','customers','new-order','orders','order','track','track-portal','order-start','self-order','order-complete','join-after-order','progress'];
     if (!in_array($page, $allowed, true)) { http_response_code(404); $page = 'not-found'; }
     require PROJECT_ROOT . '/app/views/layout_top.php';
     require PROJECT_ROOT . '/app/views/' . $page . '.php';

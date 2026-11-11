@@ -1,15 +1,16 @@
 <?php
 $user = current_user();
-$nav = [
+$nav = is_admin() ? [
     ['dashboard', 'ภาพรวม', '▦'],
-    ['orders', is_admin() ? 'รายการซักรีดทั้งหมด' : 'รายการของฉัน', '▤'],
-    ['order-start', 'สั่งบริการด้วยตนเอง', '+'],
+    ['orders', 'รายการซักรีดทั้งหมด', '▤'],
+    ['new-order', 'สร้างออร์เดอร์', '+'],
+    ['services', 'บริการและราคา', '◈'],
+    ['customers', 'ลูกค้า', '♙'],
+] : [
+    ['progress', 'ความคืบหน้าการซักรีด', '◉'],
+    ['orders', 'ประวัติรายการ', '▤'],
+    ['self-order', 'สร้างออร์เดอร์', '+'],
 ];
-if (is_admin()) {
-    $nav[] = ['new-order', 'สร้างออร์เดอร์', '+'];
-    $nav[] = ['services', 'บริการและราคา', '◈'];
-    $nav[] = ['customers', 'ลูกค้า', '♙'];
-}
 $readyAlertCount = 0;
 if ($user && !is_admin()) {
     $readyStmt = db()->prepare("SELECT COUNT(*) FROM laundry__orders_tbl WHERE customer_id=? AND status='ready'");
@@ -32,7 +33,7 @@ $flashMessage = take_flash();
 <div class="site-shell">
 <?php if ($user): ?>
     <aside class="sidebar">
-        <a class="brand" href="<?= e(url('dashboard')) ?>"><span class="brand-logo">◉</span><span>Laundry<span class="brand-accent">Track</span><small>Order Management</small></span></a>
+        <a class="brand" href="<?= e(url(is_admin() ? 'dashboard' : 'progress')) ?>"><span class="brand-logo">◉</span><span>Laundry<span class="brand-accent">Track</span><small>Order Management</small></span></a>
         <p class="menu-title">เมนูหลัก</p>
         <nav class="nav">
             <?php foreach ($nav as [$dest, $label, $glyph]): ?>
@@ -44,6 +45,6 @@ $flashMessage = take_flash();
     </aside>
 <?php endif; ?>
     <div class="content-area <?= $user ? '' : 'guest-area' ?>">
-        <header class="topbar"><div><span class="topbar-kicker">LAUNDRY MANAGEMENT</span><strong><?= $user ? 'จัดการซักรีดได้ในที่เดียว' : 'LaundryTrack' ?></strong></div><div class="topbar-actions"><?php if ($user && !is_admin()): ?><a id="customer-notifications" class="notification-bell" href="<?= e(url('dashboard')) ?>" data-feed="<?= e(url('notifications-feed')) ?>" data-count="<?= $readyAlertCount ?>" aria-label="การแจ้งเตือน: มี <?= $readyAlertCount ?> ออร์เดอร์ที่พร้อมรับผ้า">🔔 แจ้งเตือน <span class="notification-count" data-ready-badge <?= $readyAlertCount === 0 ? 'hidden' : '' ?>><?= $readyAlertCount ?></span></a><?php endif; ?><span class="topbar-tag"><?= $user ? ($user['role'] === 'admin' ? 'ADMIN PANEL' : 'CUSTOMER PORTAL') : 'WELCOME' ?></span></div></header>
+        <header class="topbar"><div><span class="topbar-kicker">LAUNDRY MANAGEMENT</span><strong><?= $user ? 'จัดการซักรีดได้ในที่เดียว' : 'LaundryTrack' ?></strong></div><div class="topbar-actions"><?php if ($user && !is_admin()): ?><a id="customer-notifications" class="notification-bell" href="<?= e(url('progress')) ?>" data-feed="<?= e(url('notifications-feed')) ?>" data-count="<?= $readyAlertCount ?>" aria-label="การแจ้งเตือน: มี <?= $readyAlertCount ?> ออร์เดอร์ที่พร้อมรับผ้า">🔔 แจ้งเตือน <span class="notification-count" data-ready-badge <?= $readyAlertCount === 0 ? 'hidden' : '' ?>><?= $readyAlertCount ?></span></a><?php endif; ?><span class="topbar-tag"><?= $user ? ($user['role'] === 'admin' ? 'ADMIN PANEL' : 'CUSTOMER PORTAL') : 'WELCOME' ?></span></div></header>
         <main class="main-content">
         <?php if ($flashMessage): ?><div class="alert <?= $flashMessage['kind'] === 'error' ? 'alert-error' : 'alert-success' ?>" role="status"><?= e($flashMessage['message']) ?></div><?php endif; ?>

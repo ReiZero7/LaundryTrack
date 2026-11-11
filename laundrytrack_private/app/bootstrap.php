@@ -151,18 +151,64 @@ function guest_tracking_order(): ?array {
     $order = $stmt->fetch();
     return $order ?: null;
 }
+/**
+ * Resolve an order a guest can associate with a NEW member account.
+ * Immediate self-checkout is allowed with its session-bound token.
+ * A QR-only guest session may join AFTER pickup was confirmed.
+ * Each path remains tied to the stored hash; revocation invalidates it.
+ */
+function membership_claim(): ?array {
+    if (current_user()) return null;
+    $guest = guest_tracking_order();
+    if ($guest && $guest['status'] === 'picked_up') {
+        // After pickup, the bearer QR alone cannot claim membership.
+        // Only the session which confirmed collection may claim for one hour.
+        $proof = $_SESSION['guest_pickup_claim'] ?? null;
+        $session = $_SESSION['guest_track'];
+        if (!is_array($proof)
+            || !is_int($proof['order_id'] ?? null)
+            || !is_string($proof['token_hash'] ?? null)
+            || !is_int($proof['confirmed_at'] ?? null)
+            || $proof['order_id'] !== (int)$guest['id']
+            || !hash_equals((string)$session['token_hash'], $proof['token_hash'])
+            || $proof['confirmed_at'] > time()
+            || time() - $proof['confirmed_at'] > 3600) return null;
+        return [
+            'order_id' => (int)$guest['id'],
+            'customer_id' => (int)$guest['customer_id'],
+            'token_hash' => (string)$session['token_hash'],
+            'source' => 'guest',
+        ];
+    }
+    $pending = $_SESSION['new_self_order'] ?? null;
+    if (!is_array($pending)
+        || !is_int($pending['order_id'] ?? null) || !is_int($pending['customer_id'] ?? null)
+        || !is_string($pending['token_hash'] ?? null)
+        || !preg_match('/^[a-f0-9]{64}$/D', $pending['token_hash'])) return null;
+    return [
+        'order_id' => $pending['order_id'],
+        'customer_id' => $pending['customer_id'],
+        'token_hash' => $pending['token_hash'],
+        'source' => 'checkout',
+    ];
+}
+function order_progress_stage(string $status): int {
+    return [
+        'requested' => 1, 'received' => 2, 'washing' => 3,
+        'drying' => 4, 'ready' => 5, 'picked_up' => 6,
+        'cancelled' => 0,
+    ][$status] ?? 0;
+}
 function money(float|string|null $amount): string {
     return number_format((float)($amount ?? 0), 2);
 }
 function order_status_label(string $status, string $creatorRole): string {
-    // A public self-service order is a request, not proof of laundry hand-off.
-    return $status === 'received' && $creatorRole === 'customer'
-        ? 'รอลูกค้านำผ้ามาส่ง'
-        : status_label($status);
+    // Older views still call this with creator_role; the database now has a real requested status.
+    return status_label($status);
 }
 function status_label(string $status): string {
     return [
-        'received' => 'รับผ้าแล้ว', 'washing' => 'กำลังซัก', 'drying' => 'กำลังอบ/ตาก',
+        'requested' => 'รอลูกค้านำผ้ามาส่ง', 'received' => 'รับผ้าแล้ว', 'washing' => 'กำลังซัก', 'drying' => 'กำลังอบ/ตาก',
         'ready' => 'พร้อมรับผ้า', 'picked_up' => 'รับผ้าคืนแล้ว', 'cancelled' => 'ยกเลิก',
     ][$status] ?? $status;
 }

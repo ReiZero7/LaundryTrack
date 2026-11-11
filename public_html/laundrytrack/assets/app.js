@@ -196,7 +196,8 @@
 
   const classes = {
     ready: 'is-good', picked_up: 'is-good', cancelled: 'is-muted',
-    washing: 'is-progress', drying: 'is-progress', received: 'is-pending'
+    washing: 'is-progress', drying: 'is-progress',
+    received: 'is-pending', requested: 'is-pending'
   };
   function showReadyToast() {
     document.querySelector('.pickup-toast')?.remove();
@@ -242,4 +243,92 @@
   });
   window.addEventListener('focus', refreshGuest);
   refreshGuest();
+})();
+
+// Member progress page polls only its authenticated customer's orders.
+// The server validates session ownership for every response.
+(() => {
+  const page = document.getElementById('member-progress-page');
+  if (!page) return;
+  let inFlight = false;
+  let stopped = false;
+  let previous = new Map();
+  const guidance = {
+    requested: 'กรุณานำผ้ามาส่งที่ร้าน เมื่อพนักงานตรวจรับแล้วสถานะจะอัปเดต',
+    received: 'ร้านได้รับผ้าแล้ว และจะเริ่มดำเนินการซักตามคิว',
+    washing: 'กำลังซักผ้าของคุณ',
+    drying: 'กำลังอบหรือตากผ้าของคุณ',
+    ready: '🔔 ผ้าพร้อมรับแล้ว กรุณารับผ้าและยืนยันในหน้ารายละเอียด',
+    picked_up: 'คุณยืนยันรับผ้าคืนแล้ว ขอบคุณที่ใช้บริการ',
+    cancelled: 'ออร์เดอร์นี้ถูกยกเลิก'
+  };
+  const classes = {
+    requested: 'is-pending', received: 'is-pending', washing: 'is-progress',
+    drying: 'is-progress', ready: 'is-good', picked_up: 'is-good', cancelled: 'is-muted'
+  };
+  async function refresh() {
+    if (stopped || inFlight || document.visibilityState !== 'visible') return;
+    inFlight = true;
+    try {
+      const response = await fetch(page.dataset.feed, {
+        credentials: 'same-origin', cache: 'no-store', headers: {'Accept': 'application/json'}
+      });
+      if (response.status === 401 || response.status === 403) { stopped = true; return; }
+      if (!response.ok) return;
+      const data = await response.json();
+      if (!Array.isArray(data.orders)) return;
+      let changed = false;
+      for (const item of data.orders) {
+        if (!Number.isSafeInteger(item.id) || typeof item.status !== 'string'
+          || !Object.prototype.hasOwnProperty.call(classes, item.status)
+          || !Number.isSafeInteger(item.stage) || item.stage < 0 || item.stage > 6) continue;
+        const card = page.querySelector('[data-progress-order="' + item.id + '"]');
+        if (!card) { changed = true; continue; }
+        const old = previous.get(item.id);
+        if (old !== undefined && old !== item.status) changed = true;
+        previous.set(item.id, item.status);
+        const statusBadge = card.querySelector('[data-progress-status]');
+        if (statusBadge) {
+          statusBadge.textContent = typeof item.label === 'string' ? item.label : item.status;
+          statusBadge.className = 'status ' + classes[item.status];
+        }
+        const mainLabel = card.querySelector('[data-progress-main-label]');
+        if (mainLabel) mainLabel.textContent = typeof item.label === 'string' ? item.label : item.status;
+        const count = card.querySelector('[data-progress-count]');
+        if (count) count.textContent = item.stage + '/6 ขั้นตอน';
+        const fill = card.querySelector('[data-progress-fill]');
+        if (fill) fill.className = 'member-progress-track-fill stage-' + item.stage;
+        const bar = card.querySelector('[role="progressbar"]');
+        if (bar) bar.setAttribute('aria-valuenow', String(item.stage));
+        card.querySelectorAll('[data-progress-step]').forEach(node => {
+          const step = Number(node.dataset.progressStep);
+          node.classList.toggle('completed', step <= item.stage);
+          node.classList.toggle('current', step === item.stage);
+          const dot = node.querySelector('.member-step-dot');
+          if (dot) dot.textContent = step < item.stage ? '✓' : String(step);
+        });
+        const note = card.querySelector('[data-progress-guidance]');
+        if (note) note.textContent = guidance[item.status];
+      }
+      if (changed) {
+        let banner = document.getElementById('member-progress-changed');
+        if (!banner) {
+          banner = document.createElement('a');
+          banner.id = 'member-progress-changed';
+          banner.className = 'btn btn-light';
+          banner.href = 'index.php?page=progress';
+          banner.textContent = 'มีการเปลี่ยนสถานะหรือรายการใหม่ ดูความคืบหน้าล่าสุด';
+          page.querySelector('.member-progress-hero-actions')?.prepend(banner);
+        }
+      }
+    } catch (_) {
+      // Retry at the next interval if the connection is unavailable.
+    } finally { inFlight = false; }
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') refresh();
+  });
+  window.addEventListener('focus', refresh);
+  window.setInterval(refresh, 30000);
+  refresh();
 })();

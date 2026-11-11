@@ -16,15 +16,15 @@ if (!is_admin() || !is_array($trackingNotice) || (int)($trackingNotice['order_id
 } else {
     unset($_SESSION['tracking_token_notice']); // The secret will not be retrievable later.
 }
-$selfServiceWaitingDropoff = $order['status'] === 'received' && $order['creator_role'] === 'customer';
-$transitions = ['received' => ['washing','cancelled'], 'washing' => ['drying'], 'drying' => ['ready']];
+$selfServiceWaitingDropoff = $order['status'] === 'requested';
+$transitions = ['requested' => ['received','cancelled'], 'received' => ['washing','cancelled'], 'washing' => ['drying'], 'drying' => ['ready']];
 $nextStates = $transitions[$order['status']] ?? [];
 ?>
 <div class="page-heading"><div><p class="eyebrow">ORDER DETAIL</p><h1>ออร์เดอร์ <?= e($order['order_no']) ?></h1><p>สร้างเมื่อ <?= e(date('d/m/Y H:i', strtotime($order['received_at']))) ?></p></div><a class="btn btn-light" href="<?= e(url('orders')) ?>">← กลับรายการ</a></div>
 <?php if ($selfServiceWaitingDropoff): ?>
 <section class="panel order-self-identity">
     <strong>🧺 ออร์เดอร์จากลูกค้า: ยังรอตรวจรับผ้าจริง</strong>
-    <p>ลูกค้าส่งคำสั่งบริการผ่านเว็บไซต์แล้ว แต่ร้านต้องตรวจสอบและรับผ้าจริงก่อนเปลี่ยนเป็นกำลังซัก</p>
+    <p>ลูกค้าส่งคำสั่งบริการผ่านเว็บไซต์แล้ว แต่ร้านต้องตรวจสอบและรับผ้าจริงก่อนเปลี่ยนเป็นรับผ้าแล้ว</p>
 </section>
 <?php endif; ?>
 <div class="detail-grid"><section class="panel"><div class="panel-header"><h2>ข้อมูลออร์เดอร์</h2><span class="status <?= status_class($order['status']) ?>"><?= e(order_status_label($order['status'], $order['creator_role'])) ?></span></div><div class="info-grid"><div><small>ลูกค้า</small><strong><?= e($order['customer_name']) ?></strong></div><div><small>อีเมล</small><strong><?= e($order['customer_email']) ?></strong></div><div><small>เบอร์โทร</small><strong><?= e($order['customer_phone'] ?: '—') ?></strong></div><div><small>กำหนดรับผ้า</small><strong><?= e(date('d/m/Y H:i', strtotime($order['due_at']))) ?></strong></div></div><h3 class="subheading">รายการบริการ</h3><div class="table-wrap"><table><thead><tr><th>บริการ</th><th>จำนวน</th><th>ราคา/หน่วย</th><th>รวม</th></tr></thead><tbody><?php foreach ($items as $i): ?><tr><td><?= e($i['name']) ?></td><td><?= money($i['quantity']) ?> <?= e($i['unit']) ?></td><td>฿<?= money($i['unit_price']) ?></td><td>฿<?= money($i['subtotal']) ?></td></tr><?php endforeach; ?></tbody></table></div><div class="order-totals"><span>ค่าบริการรวม</span><strong>฿<?= money($order['total_amount']) ?></strong></div><?php if ($order['notes']): ?><p class="note-box"><strong>หมายเหตุ:</strong> <?= nl2br(e($order['notes'])) ?></p><?php endif; ?></section>
@@ -68,6 +68,6 @@ $nextStates = $transitions[$order['status']] ?? [];
 <p class="pickup-admin-note">🔔 แจ้งลูกค้าแล้วว่าผ้าพร้อมรับ กำลังรอลูกค้ายืนยันการรับผ้า</p>
 <?php endif; ?>
 <?php if (is_admin() && $nextStates): ?><div class="change-status"><h3>เปลี่ยนสถานะ</h3><form method="post" action="index.php" class="form-stack"><?= csrf_field() ?><input type="hidden" name="action" value="order-status"><input type="hidden" name="id" value="<?= $id ?>"><select name="status" required><?php foreach ($nextStates as $status): ?><option value="<?= e($status) ?>"><?= e(status_label($status)) ?></option><?php endforeach; ?></select><?php if ($selfServiceWaitingDropoff): ?>
-    <label class="dropoff-confirm-check"><input type="checkbox" name="dropoff_confirmed" value="yes"> ยืนยันว่าร้านได้รับผ้าจริงแล้ว (ต้องตรวจรับก่อนเริ่มซัก)</label>
+    <label class="dropoff-confirm-check"><input type="checkbox" name="dropoff_confirmed" value="yes"> ยืนยันว่าร้านได้รับผ้าจริงแล้ว (ต้องตรวจรับก่อนเปลี่ยนเป็นรับผ้าแล้ว)</label>
 <?php endif; ?>
 <button type="submit" class="btn btn-primary btn-block">อัปเดตสถานะ</button></form></div><?php endif; ?></section></div>

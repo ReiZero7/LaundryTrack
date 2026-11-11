@@ -1,15 +1,14 @@
 <?php
 if (current_user()) go('dashboard');
-$pending = $_SESSION['new_self_order'] ?? null;
-$ready = is_array($pending) && is_int($pending['order_id'] ?? null)
-    && is_string($pending['token_hash'] ?? null);
+$pending = membership_claim();
+$ready = $pending !== null;
 ?>
 <?php if (!$ready): ?>
-<div class="empty-state"><h1>กรุณาสร้างออร์เดอร์ก่อน</h1><a class="btn btn-primary" href="<?= e(url('order-start')) ?>">เริ่มต้นใหม่</a></div>
+<div class="empty-state"><h1>ไม่พบออร์เดอร์ที่เชื่อมกับบัญชีได้</h1><a class="btn btn-primary" href="<?= e(url('order-start')) ?>">เริ่มต้นใหม่</a></div>
 <?php else: ?>
 <div class="auth-layout">
-    <section class="auth-intro"><p class="eyebrow">JOIN LAUNDRYTRACK</p><h1>สมัครสมาชิก<br><span>หลังสร้างออร์เดอร์</span></h1>
-        <p>ออร์เดอร์ที่เพิ่งสร้างจะเชื่อมกับบัญชีใหม่ของคุณทันที</p>
+    <section class="auth-intro"><p class="eyebrow">JOIN LAUNDRYTRACK</p><h1>สมัครสมาชิก<br><span>เก็บประวัติการซักรีด</span></h1>
+        <p>ออร์เดอร์นี้จะถูกเชื่อมกับบัญชีสมาชิกใหม่ รวมถึงกรณีที่คุณรับผ้าคืนแล้ว</p>
     </section>
     <section class="form-panel auth-panel">
         <h2>สร้างบัญชีสมาชิก</h2>
@@ -20,7 +19,7 @@ $ready = is_array($pending) && is_int($pending['order_id'] ?? null)
             <label>รหัสผ่าน (อย่างน้อย 8 ตัวอักษร)<input type="password" name="password" required minlength="8" maxlength="4096" autocomplete="new-password"></label>
             <button class="btn btn-primary btn-block" type="submit">สมัครสมาชิกและเก็บออร์เดอร์</button>
         </form>
-        <p class="auth-footer"><a href="<?= e(url('order-complete')) ?>">ยังไม่สมัคร กลับไปดู QR Code</a></p>
+        <p class="auth-footer"><a href="<?= e(url($pending['source'] === 'guest' ? 'track-portal' : 'order-complete')) ?>">ยังไม่สมัคร กลับไปติดตามออร์เดอร์</a></p>
     </section>
 </div>
 <?php endif; ?>
