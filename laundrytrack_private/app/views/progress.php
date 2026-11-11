@@ -53,7 +53,7 @@ $steps = [
                     <span data-progress-count><?= $stage ?>/6 ขั้นตอน</span>
                 </div>
                 <div class="member-progress-track" role="progressbar" aria-label="ความคืบหน้าของออร์เดอร์ <?= e($o['order_no']) ?>" aria-valuemin="0" aria-valuemax="6" aria-valuenow="<?= $stage ?>">
-                    <div class="member-progress-track-fill" data-progress-fill style="width:<?= (int)(100*$stage/6) ?>%"></div>
+                    <div class="member-progress-track-fill stage-<?= $stage ?>" data-progress-fill></div>
                 </div>
                 <ol class="member-step-grid" aria-label="ขั้นตอนการซักรีด">
                 <?php foreach ($steps as $code => $label): ?>
