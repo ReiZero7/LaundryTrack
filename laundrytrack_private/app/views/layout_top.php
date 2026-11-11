@@ -3,6 +3,7 @@ $user = current_user();
 $nav = [
     ['dashboard', 'ภาพรวม', '▦'],
     ['orders', is_admin() ? 'รายการซักรีดทั้งหมด' : 'รายการของฉัน', '▤'],
+    ['order-start', 'สั่งบริการด้วยตนเอง', '+'],
 ];
 if (is_admin()) {
     $nav[] = ['new-order', 'สร้างออร์เดอร์', '+'];

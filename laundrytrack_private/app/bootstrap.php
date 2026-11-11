@@ -130,6 +130,9 @@ function tracking_hash(string $token): ?string {
     // Exactly 32 random bytes in lowercase hex. No order IDs as auth secrets.
     return preg_match('/^[a-f0-9]{64}$/D', $token) ? hash('sha256', $token) : null;
 }
+function shop_order_link(): string {
+    return 'https://angsila.informatics.buu.ac.th/~68160395/laundrytrack/index.php?page=order-start';
+}
 function tracking_link(string $token): string {
     // Derived from configured actual web origin; avoid Host header injection.
     // This deployment is fixed at the university public URL.
@@ -138,8 +141,9 @@ function tracking_link(string $token): string {
 function guest_tracking_order(): ?array {
     $guest = $_SESSION['guest_track'] ?? null;
     if (!is_array($guest) || !is_int($guest['order_id'] ?? null) || !is_string($guest['token_hash'] ?? null)) return null;
-    $stmt = db()->prepare("SELECT o.id,o.order_no,o.status,o.due_at,o.customer_id
+    $stmt = db()->prepare("SELECT o.id,o.order_no,o.status,o.due_at,o.customer_id,cu.role AS creator_role
         FROM laundry__orders_tbl o
+        INNER JOIN laundry__users_tbl cu ON cu.id=o.created_by
         INNER JOIN laundry__users_tbl u ON u.id=o.customer_id
         WHERE o.id=? AND o.tracking_token_hash=? AND u.email IS NULL
         LIMIT 1");
@@ -149,6 +153,12 @@ function guest_tracking_order(): ?array {
 }
 function money(float|string|null $amount): string {
     return number_format((float)($amount ?? 0), 2);
+}
+function order_status_label(string $status, string $creatorRole): string {
+    // A public self-service order is a request, not proof of laundry hand-off.
+    return $status === 'received' && $creatorRole === 'customer'
+        ? 'รอลูกค้านำผ้ามาส่ง'
+        : status_label($status);
 }
 function status_label(string $status): string {
     return [

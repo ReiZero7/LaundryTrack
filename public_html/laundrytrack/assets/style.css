@@ -85,3 +85,15 @@ body{background:radial-gradient(circle at 92% 14%,#d5f3fa 0,transparent 30%),rad
 /* Show the QR as its own full-width card within the order detail grid. */
 .detail-grid > .walkin-qr-panel{grid-column:1/-1}
 @media print{.walkin-qr-panel form,.walkin-qr-panel button{display:none!important}}
+
+/* Public self-service order / member choice */
+.self-start-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;align-items:stretch}
+.self-start-card{display:flex;flex-direction:column;gap:16px;padding:30px}
+.self-start-card>p{flex:1;color:#536c68}
+.self-start-icon{font-size:40px}
+.self-after-order{margin-top:20px;max-width:840px}
+.self-after-actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:14px}
+.order-self-identity{padding:16px;border-radius:12px;background:#effaf4;border:1px solid #c5ead4}
+.self-service-shop-panel{margin-bottom:20px}
+.anti-bot-field{position:absolute!important;left:-10000px!important;width:1px!important;height:1px!important;overflow:hidden!important}
+@media(max-width:760px){.self-start-options{grid-template-columns:1fr}.self-start-card{padding:20px}.self-after-actions>*{flex:1 1 100%}}

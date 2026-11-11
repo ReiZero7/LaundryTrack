@@ -4,8 +4,9 @@ $rawToken = $_GET['token'] ?? '';
 $tokenHash = is_string($rawToken) ? tracking_hash($rawToken) : null;
 $publicTrackOrder = null;
 if ($tokenHash !== null) {
-    $stmt = db()->prepare("SELECT o.order_no,o.status,o.due_at
+    $stmt = db()->prepare("SELECT o.order_no,o.status,o.due_at,cu.role AS creator_role
         FROM laundry__orders_tbl o
+        INNER JOIN laundry__users_tbl cu ON cu.id=o.created_by
         INNER JOIN laundry__users_tbl u ON u.id=o.customer_id
         WHERE o.tracking_token_hash=? AND u.email IS NULL LIMIT 1");
     $stmt->execute([$tokenHash]);
@@ -26,11 +27,11 @@ if ($tokenHash !== null) {
 </div></div>
 <section class="panel guest-tracking-card">
     <div class="panel-header"><h2>ออร์เดอร์ <?= e($publicTrackOrder['order_no']) ?></h2>
-        <span class="status <?= e(status_class($publicTrackOrder['status'])) ?>"><?= e(status_label($publicTrackOrder['status'])) ?></span>
+        <span class="status <?= e(status_class($publicTrackOrder['status'])) ?>"><?= e(order_status_label($publicTrackOrder['status'], $publicTrackOrder['creator_role'])) ?></span>
     </div>
     <div class="info-grid">
         <div><small>วันที่คาดว่าจะรับผ้า</small><strong><?= e(date('d/m/Y H:i', strtotime($publicTrackOrder['due_at']))) ?></strong></div>
-        <div><small>สถานะล่าสุด</small><strong><?= e(status_label($publicTrackOrder['status'])) ?></strong></div>
+        <div><small>สถานะล่าสุด</small><strong><?= e(order_status_label($publicTrackOrder['status'], $publicTrackOrder['creator_role'])) ?></strong></div>
     </div>
     <p class="muted">หน้า QR นี้แสดงเฉพาะสถานะและกำหนดรับผ้า ไม่แสดงชื่อ เบอร์โทร หรือรายละเอียดส่วนตัว</p>
     <?php if (!current_user()): ?>
