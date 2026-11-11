@@ -5,7 +5,7 @@ $filter = $admin ? '' : ' WHERE customer_id = ?';
 $stmt = db()->prepare('SELECT COUNT(*) AS total, COALESCE(SUM(status NOT IN (\'cancelled\',\'picked_up\')),0) AS processing, COALESCE(SUM(status = \'ready\'),0) AS ready_count, COALESCE(SUM(IF(status = \'cancelled\', 0, total_amount)),0) AS amount FROM laundry__orders_tbl' . $filter);
 $stmt->execute($admin ? [] : [$userId]);
 $stats = $stmt->fetch();
-$stmt = db()->prepare('SELECT o.id,o.order_no,o.received_at,o.status,o.total_amount,u.full_name FROM laundry__orders_tbl o JOIN laundry__users_tbl u ON u.id=o.customer_id' . ($admin ? '' : ' WHERE o.customer_id=?') . ' ORDER BY o.id DESC LIMIT 6');
+$stmt = db()->prepare('SELECT o.id,o.order_no,o.received_at,o.status,o.total_amount,u.full_name,cu.role AS creator_role FROM laundry__orders_tbl o JOIN laundry__users_tbl u ON u.id=o.customer_id JOIN laundry__users_tbl cu ON cu.id=o.created_by' . ($admin ? '' : ' WHERE o.customer_id=?') . ' ORDER BY o.id DESC LIMIT 6');
 $stmt->execute($admin ? [] : [$userId]);
 $recent = $stmt->fetchAll();
 $readyNotifications = [];
@@ -60,7 +60,7 @@ if (!$admin && (int)$stats['ready_count'] > 0) {
 </div>
 <div class="panel"><div class="panel-header"><div><h2>รายการซักรีดล่าสุด</h2><p>ติดตามความคืบหน้าทุกออร์เดอร์ได้ทันที</p></div><a class="text-link" href="<?= e(url('orders')) ?>">ดูทั้งหมด →</a></div>
     <div class="table-wrap"><table><thead><tr><th>เลขออร์เดอร์</th><?php if ($admin): ?><th>ลูกค้า</th><?php endif; ?><th>วันที่รับผ้า</th><th>ยอดรวม</th><th>สถานะ</th><th></th></tr></thead><tbody>
-        <?php foreach ($recent as $r): ?><tr><td><strong><?= e($r['order_no']) ?></strong></td><?php if ($admin): ?><td><?= e($r['full_name']) ?></td><?php endif; ?><td><?= e(date('d/m/Y', strtotime($r['received_at']))) ?></td><td>฿<?= money($r['total_amount']) ?></td><td><span class="status <?= status_class($r['status']) ?>"><?= e(status_label($r['status'])) ?></span></td><td><a class="text-link" href="<?= e(url('order', ['id' => (int)$r['id']])) ?>">รายละเอียด</a></td></tr><?php endforeach; ?>
+        <?php foreach ($recent as $r): ?><tr><td><strong><?= e($r['order_no']) ?></strong></td><?php if ($admin): ?><td><?= e($r['full_name']) ?></td><?php endif; ?><td><?= e(date('d/m/Y', strtotime($r['received_at']))) ?></td><td>฿<?= money($r['total_amount']) ?></td><td><span class="status <?= status_class($r['status']) ?>"><?= e(order_status_label($r['status'], $r['creator_role'])) ?></span></td><td><a class="text-link" href="<?= e(url('order', ['id' => (int)$r['id']])) ?>">รายละเอียด</a></td></tr><?php endforeach; ?>
         <?php if (!$recent): ?><tr><td colspan="6" class="empty-cell">ยังไม่มีรายการซักรีด</td></tr><?php endif; ?>
     </tbody></table></div>
 </div>
