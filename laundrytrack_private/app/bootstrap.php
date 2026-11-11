@@ -188,6 +188,62 @@ function send_email_verification(string $email, string $token): bool {
     }
 }
 
+/**
+ * Consume a one-use email token. Called only from a CSRF-protected POST.
+ * Transferring a guest order requires its original customer AND token hash to
+ * match, so a rotated/revoked QR cannot be used to claim a different order.
+ *
+ * Returns 'verified', 'linked', or 'claim_unavailable'. Invalid/expired tokens
+ * throw DomainException; no user is logged in automatically.
+ */
+function complete_email_verification(string $rawToken): string {
+    $hash = email_verification_hash($rawToken);
+    if ($hash === null) throw new DomainException('Invalid verification token');
+    $pdo = db();
+    $pdo->beginTransaction();
+    try {
+        $stmt = $pdo->prepare("SELECT v.user_id,v.claimed_order_id,v.claimed_customer_id,
+                v.claimed_token_hash
+            FROM laundry__email_verifications_tbl v
+            JOIN laundry__users_tbl u ON u.id=v.user_id
+            WHERE v.token_hash=? AND v.expires_at > UTC_TIMESTAMP()
+              AND u.role='customer' AND u.email_verified_at IS NULL
+            FOR UPDATE");
+        $stmt->execute([$hash]);
+        $record = $stmt->fetch();
+        if (!$record) throw new DomainException('Expired or consumed email token');
+        $stmt = $pdo->prepare("UPDATE laundry__users_tbl
+            SET email_verified_at=UTC_TIMESTAMP()
+            WHERE id=? AND role='customer' AND email_verified_at IS NULL");
+        $stmt->execute([(int)$record['user_id']]);
+        if ($stmt->rowCount() !== 1) throw new DomainException('Account already verified');
+
+        $result = 'verified';
+        if ($record['claimed_order_id'] !== null) {
+            $stmt = $pdo->prepare("UPDATE laundry__orders_tbl
+                SET customer_id=?, tracking_token_hash=NULL
+                WHERE id=? AND customer_id=? AND tracking_token_hash=?");
+            $stmt->execute([
+                (int)$record['user_id'], (int)$record['claimed_order_id'],
+                (int)$record['claimed_customer_id'], $record['claimed_token_hash'],
+            ]);
+            if ($stmt->rowCount() === 1) {
+                $result = 'linked';
+            } else {
+                $result = 'claim_unavailable';
+                error_log('[LaundryTrack] Email verified but guest order could not be linked');
+            }
+        }
+        $pdo->prepare('DELETE FROM laundry__email_verifications_tbl WHERE user_id=?')
+            ->execute([(int)$record['user_id']]);
+        $pdo->commit();
+        return $result;
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        throw $e;
+    }
+}
+
 function shop_order_link(): string {
     return 'https://angsila.informatics.buu.ac.th/~68160395/laundrytrack/index.php?page=order-start';
 }
