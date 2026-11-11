@@ -23,7 +23,7 @@ if ($valid) {
 <p>กรุณานำผ้ามาส่งที่ร้านตามขั้นตอน รายการนี้ยังไม่ยืนยันว่าได้รับผ้าแล้ว</p>
 </div></div>
 <section class="panel guest-tracking-card">
-    <div class="panel-header"><h2>หมายเลข <?= e($order['order_no']) ?></h2><span class="status <?= e(status_class($order['status'])) ?>"><?= e(status_label($order['status'])) ?></span></div>
+    <div class="panel-header"><h2>หมายเลข <?= e($order['order_no']) ?></h2><span class="status <?= e(status_class($order['status'])) ?>"><?= e(order_status_label($order['status'], 'customer')) ?></span></div>
     <p class="muted">โปรดบันทึกลิงก์หรือ QR นี้ไว้เพื่อติดตามออร์เดอร์ในภายหลัง ห้ามแชร์ให้บุคคลอื่น</p>
     <div class="walkin-qr-output" data-qr-link="<?= e($link) ?>">
         <div id="order-qr-code" aria-label="QR Code ติดตามออร์เดอร์"></div>
