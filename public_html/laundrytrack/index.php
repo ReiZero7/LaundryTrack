@@ -63,7 +63,7 @@ try {
         echo json_encode([
             'id' => (int)$trackedOrder['id'],
             'status' => $trackedOrder['status'],
-            'status_label' => status_label($trackedOrder['status']),
+            'status_label' => order_status_label($trackedOrder['status'], $trackedOrder['creator_role']),
             'ready' => $trackedOrder['status'] === 'ready'
         ], JSON_UNESCAPED_UNICODE);
         exit;
