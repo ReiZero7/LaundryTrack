@@ -196,7 +196,8 @@
 
   const classes = {
     ready: 'is-good', picked_up: 'is-good', cancelled: 'is-muted',
-    washing: 'is-progress', drying: 'is-progress', received: 'is-pending'
+    washing: 'is-progress', drying: 'is-progress',
+    received: 'is-pending', requested: 'is-pending'
   };
   function showReadyToast() {
     document.querySelector('.pickup-toast')?.remove();
