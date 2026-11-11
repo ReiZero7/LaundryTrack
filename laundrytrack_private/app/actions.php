@@ -459,10 +459,18 @@ function process_action(): never {
                 $pdo = db();
                 $pdo->beginTransaction();
                 try {
-                    $stmt = $pdo->prepare('SELECT status FROM laundry__orders_tbl WHERE id=? FOR UPDATE');
+                    $stmt = $pdo->prepare('SELECT o.status,cu.role AS creator_role
+                        FROM laundry__orders_tbl o JOIN laundry__users_tbl cu ON cu.id=o.created_by
+                        WHERE o.id=? FOR UPDATE');
                     $stmt->execute([$orderId]);
-                    $current = $stmt->fetchColumn();
+                    $orderState = $stmt->fetch();
+                    $current = $orderState['status'] ?? null;
                     if (!$current || !in_array($next, $transitions[(string)$current] ?? [], true)) throw new DomainException('Invalid status transition');
+                    // Customer-created orders require acknowledgement of physical laundry receipt.
+                    if ($current === 'received' && $next === 'washing'
+                        && $orderState['creator_role'] === 'customer' && post_string('dropoff_confirmed') !== 'yes') {
+                        throw new DomainException('Laundry must be physically received before washing');
+                    }
                     $pdo->prepare('UPDATE laundry__orders_tbl SET status=? WHERE id=?')->execute([$next, $orderId]);
                     $pdo->prepare('INSERT INTO laundry__status_history_tbl(order_id,changed_by,old_status,new_status) VALUES(?,?,?,?)')->execute([$orderId, current_user()['id'], $current, $next]);
                     $pdo->commit();
