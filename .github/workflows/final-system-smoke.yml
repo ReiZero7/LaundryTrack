@@ -1,0 +1,92 @@
+name: Final system HTTP smoke (isolated MySQL)
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  end-to-end:
+    name: Guest / Member / Admin HTTP smoke
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: ci-local-only
+          MYSQL_DATABASE: laundrytrack_ci
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_mysql
+          coverage: none
+      - name: Create disposable test .env
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            printf '%s\n' 'APP_ENV=ci' 'DB_HOST=127.0.0.1' 'DB_PORT=3306' \
+              'DB_NAME=laundrytrack_ci' 'DB_USER=root' 'DB_PASS=ci-local-only'
+            printf 'RATE_LIMIT_SECRET='
+            php -r 'echo bin2hex(random_bytes(32)), PHP_EOL;'
+          } > laundrytrack_private/.env
+          chmod 600 laundrytrack_private/.env
+      - name: Create disposable CI database schema
+        shell: bash
+        run: |
+          set -euo pipefail
+          MYSQL_PWD=ci-local-only mysql -h 127.0.0.1 -P 3306 -u root laundrytrack_ci \
+            < tests/fixtures/final-system-base.sql
+          MYSQL_PWD=ci-local-only mysql -h 127.0.0.1 -P 3306 -u root laundrytrack_ci \
+            < laundrytrack_private/migrations/2026-11-11_order_rate_limiting.sql
+      - name: Add disposable admin account with password hash
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -r '
+          require "laundrytrack_private/app/bootstrap.php";
+          $insert = db()->prepare("INSERT INTO laundry__users_tbl(full_name,email,password_hash,role) VALUES (?,?,?,?)");
+          $insert->execute(["CI Admin", "staff@example.test",
+              password_hash("ci-admin-passphrase", PASSWORD_DEFAULT), "admin"]);
+          '
+      - name: Start local-only PHP server
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -S 127.0.0.1:18081 -t public_html/laundrytrack > /tmp/laundrytrack-ci-web.log 2>&1 &
+          echo $! > /tmp/laundrytrack-ci-web.pid
+          for attempt in $(seq 1 30); do
+            if curl --silent --fail http://127.0.0.1:18081/index.php?page=home >/dev/null; then
+              echo 'LOCAL PHP SERVER OK'
+              exit 0
+            fi
+            sleep 1
+          done
+          echo 'Local PHP server failed to start'
+          exit 1
+      - name: HTTP end-to-end regression tests
+        env:
+          APP_ENV: ci
+          DB_NAME: laundrytrack_ci
+          LAUNDRY_SMOKE_LOCAL_ONLY: yes
+        run: python3 tests/final-system-smoke.py
+      - name: Stop local-only PHP server
+        if: always()
+        shell: bash
+        run: |
+          if [ -s /tmp/laundrytrack-ci-web.pid ]; then
+            kill "$(cat /tmp/laundrytrack-ci-web.pid)" 2>/dev/null || true
+          fi
