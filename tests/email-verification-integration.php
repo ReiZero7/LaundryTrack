@@ -14,7 +14,7 @@ if (setting('APP_ENV') !== 'ci' || setting('DB_NAME') !== 'laundrytrack_ci') {
 }
 $pdo = db();
 check($pdo->query('SELECT DATABASE()')->fetchColumn() === 'laundrytrack_ci', 'disposable DB guard');
-check($pdo->query('SELECT COUNT(*) FROM laundry__users_tbl WHERE id IN (1,2) AND email_verified_at IS NOT NULL')->fetchColumn() === 2,
+check((int)$pdo->query('SELECT COUNT(*) FROM laundry__users_tbl WHERE id IN (1,2) AND email_verified_at IS NOT NULL')->fetchColumn() === 2,
     'migration preserves access for old customer and admin');
 check($pdo->query('SELECT email_verified_at FROM laundry__users_tbl WHERE id=3')->fetchColumn() === null,
     'walk-in guest stays without email verification');
