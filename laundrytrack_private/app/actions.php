@@ -109,11 +109,18 @@ function process_action(): never {
             case 'order-create':
                 require_admin();
                 $customerId = post_int('customer_id');
+                $walkin = post_string('customer_mode') === 'walkin';
+                $walkinName = post_string('walkin_name');
+                $walkinPhone = post_string('walkin_phone');
+                if ($walkin && (text_length($walkinName) < 2 || text_length($walkinName) > 100 || text_length($walkinPhone) > 20)) {
+                    flash('กรุณากรอกชื่อลูกค้าหน้าร้านให้ถูกต้อง', 'error');
+                    go('new-order');
+                }
                 $due = post_string('due_at');
                 $notes = post_string('notes');
                 $serviceIds = $_POST['service_id'] ?? [];
                 $qtys = $_POST['quantity'] ?? [];
-                if ($customerId < 1 || !is_array($serviceIds) || !is_array($qtys) || count($serviceIds) < 1 || count($serviceIds) > 15 || text_length($notes) > 2000) {
+                if ((!$walkin && $customerId < 1) || !is_array($serviceIds) || !is_array($qtys) || count($serviceIds) < 1 || count($serviceIds) > 15 || text_length($notes) > 2000) {
                     flash('กรุณาเลือกลูกค้าและบริการ', 'error'); go('new-order');
                 }
                 $dueDate = DateTimeImmutable::createFromFormat('!Y-m-d\TH:i', $due);
@@ -123,9 +130,16 @@ function process_action(): never {
                 $pdo = db();
                 $pdo->beginTransaction();
                 try {
-                    $stmt = $pdo->prepare('SELECT id FROM laundry__users_tbl WHERE id=? AND role=\'customer\'');
-                    $stmt->execute([$customerId]);
-                    if (!$stmt->fetch()) throw new DomainException('Customer not found');
+                    if ($walkin) {
+                        // Keep the foreign-key model intact, but create a no-email, non-login account.
+                        $stmt = $pdo->prepare("INSERT INTO laundry__users_tbl(full_name,phone,email,password_hash,role) VALUES(?,?,NULL,?,'customer')");
+                        $stmt->execute([$walkinName, $walkinPhone ?: null, password_hash(bin2hex(random_bytes(32)), PASSWORD_DEFAULT)]);
+                        $customerId = (int)$pdo->lastInsertId();
+                    } else {
+                        $stmt = $pdo->prepare("SELECT id FROM laundry__users_tbl WHERE id=? AND role='customer'");
+                        $stmt->execute([$customerId]);
+                        if (!$stmt->fetch()) throw new DomainException('Customer not found');
+                    }
                     $items = [];
                     $total = 0.0;
                     $serviceStmt = $pdo->prepare('SELECT id,price FROM laundry__services_tbl WHERE id=? AND is_active=1');
@@ -145,17 +159,83 @@ function process_action(): never {
                     }
                     $total = round($total, 2);
                     $orderNo = 'LT-' . date('ymd') . '-' . strtoupper(bin2hex(random_bytes(6)));
-                    $stmt = $pdo->prepare('INSERT INTO laundry__orders_tbl(order_no,customer_id,created_by,due_at,total_amount,notes) VALUES(?,?,?,?,?,?)');
-                    $stmt->execute([$orderNo, $customerId, current_user()['id'], $dueDate->format('Y-m-d H:i:s'), number_format($total, 2, '.', ''), $notes ?: null]);
+                    $rawTrackingToken = $walkin ? bin2hex(random_bytes(32)) : null;
+                    $stmt = $pdo->prepare('INSERT INTO laundry__orders_tbl(order_no,customer_id,created_by,due_at,total_amount,notes,tracking_token_hash) VALUES(?,?,?,?,?,?,?)');
+                    $stmt->execute([$orderNo, $customerId, current_user()['id'], $dueDate->format('Y-m-d H:i:s'), number_format($total, 2, '.', ''), $notes ?: null, $rawTrackingToken === null ? null : tracking_hash($rawTrackingToken)]);
                     $orderId = (int) $pdo->lastInsertId();
                     $insert = $pdo->prepare('INSERT INTO laundry__order_items_tbl(order_id,service_id,quantity,unit_price,subtotal) VALUES(?,?,?,?,?)');
                     foreach ($items as $item) $insert->execute(array_merge([$orderId], $item));
                     $pdo->prepare('INSERT INTO laundry__status_history_tbl(order_id,changed_by,old_status,new_status,note) VALUES(?,?,NULL,\'received\',?)')->execute([$orderId, current_user()['id'], 'บันทึกรับผ้า']);
                     $pdo->commit();
+                    if ($rawTrackingToken !== null) {
+                        $_SESSION['tracking_token_notice'] = ['order_id' => $orderId, 'token' => $rawTrackingToken];
+                    }
                     flash('สร้างออร์เดอร์ ' . $orderNo . ' เรียบร้อย'); go('order', ['id' => $orderId]);
                 } catch (Throwable $e) {
                     if ($pdo->inTransaction()) $pdo->rollBack();
                     if ($e instanceof DomainException) { flash('ข้อมูลออร์เดอร์ไม่ถูกต้อง กรุณาตรวจสอบอีกครั้ง', 'error'); go('new-order'); }
+                    throw $e;
+                }
+            case 'order-tracking-rotate':
+                require_admin();
+                $orderId = post_int('id');
+                if ($orderId < 1) { flash('ออร์เดอร์ไม่ถูกต้อง', 'error'); go('orders'); }
+                $rawToken = bin2hex(random_bytes(32));
+                $stmt = db()->prepare("UPDATE laundry__orders_tbl o
+                    INNER JOIN laundry__users_tbl u ON u.id=o.customer_id
+                    SET o.tracking_token_hash=?
+                    WHERE o.id=? AND u.email IS NULL");
+                $stmt->execute([tracking_hash($rawToken), $orderId]);
+                if ($stmt->rowCount() !== 1) {
+                    flash('ไม่สามารถสร้าง QR ได้ (ใช้ได้เฉพาะออร์เดอร์ลูกค้าหน้าร้าน)', 'error');
+                    go('order', ['id' => $orderId]);
+                }
+                $_SESSION['tracking_token_notice'] = ['order_id' => $orderId, 'token' => $rawToken];
+                flash('สร้าง QR ใหม่แล้ว ลิงก์เก่าจะใช้ไม่ได้อีก');
+                go('order', ['id' => $orderId]);
+            case 'guest-track-login':
+                if (current_user()) go('dashboard');
+                $rawToken = post_string('token');
+                $tokenHash = tracking_hash($rawToken);
+                if ($tokenHash === null) { flash('ลิงก์ไม่ถูกต้อง', 'error'); go('home'); }
+                $stmt = db()->prepare("SELECT o.id FROM laundry__orders_tbl o
+                    INNER JOIN laundry__users_tbl u ON u.id=o.customer_id
+                    WHERE o.tracking_token_hash=? AND u.email IS NULL LIMIT 1");
+                $stmt->execute([$tokenHash]);
+                $orderId = $stmt->fetchColumn();
+                if (!$orderId) { flash('ลิงก์หมดอายุหรือไม่ถูกต้อง', 'error'); go('home'); }
+                session_regenerate_id(true);
+                $_SESSION['guest_track'] = ['order_id' => (int)$orderId, 'token_hash' => $tokenHash];
+                $_SESSION['csrf'] = bin2hex(random_bytes(32));
+                go('track-portal');
+            case 'guest-track-logout':
+                unset($_SESSION['guest_track']);
+                $_SESSION['csrf'] = bin2hex(random_bytes(32));
+                session_regenerate_id(true);
+                flash('ออกจากโหมดติดตามแล้ว');
+                go('home');
+            case 'guest-confirm-pickup':
+                if (current_user()) { http_response_code(403); exit('Forbidden'); }
+                $guestOrder = guest_tracking_order();
+                if (!$guestOrder) { unset($_SESSION['guest_track']); flash('สิทธิ์ติดตามหมดอายุ', 'error'); go('home'); }
+                $pdo = db();
+                $pdo->beginTransaction();
+                try {
+                    $stmt = $pdo->prepare("UPDATE laundry__orders_tbl
+                        SET status='picked_up'
+                        WHERE id=? AND tracking_token_hash=? AND status='ready'");
+                    $stmt->execute([(int)$guestOrder['id'], $_SESSION['guest_track']['token_hash']]);
+                    if ($stmt->rowCount() !== 1) throw new DomainException('Order is not ready');
+                    $pdo->prepare("INSERT INTO laundry__status_history_tbl
+                        (order_id,changed_by,old_status,new_status,note)
+                        VALUES(?,?,'ready','picked_up',?)")
+                        ->execute([(int)$guestOrder['id'],(int)$guestOrder['customer_id'],'ลูกค้าหน้าร้านยืนยันรับผ้าผ่านลิงก์ติดตาม']);
+                    $pdo->commit();
+                    flash('ยืนยันรับผ้าเรียบร้อย');
+                    go('track-portal');
+                } catch (Throwable $e) {
+                    if ($pdo->inTransaction()) $pdo->rollBack();
+                    if ($e instanceof DomainException) { flash('ออร์เดอร์ยังไม่พร้อมรับหรือยืนยันไปแล้ว', 'error'); go('track-portal'); }
                     throw $e;
                 }
             case 'order-confirm-pickup':
