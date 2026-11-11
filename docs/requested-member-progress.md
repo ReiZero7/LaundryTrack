@@ -46,3 +46,17 @@
 - The per-session public form cooldown/honeypot is **not** sufficient defense against many anonymous new sessions or distributed bots. Add server-/IP-based rate limiting before publishing the shop QR widely.
 - New member signup currently supports **creating a new account**; it does not merge the guest order into an already-existing email account (would require proof of that account).
 - Admin physical hand-off is represented by a status and history entry, not an independent receipt document or staff signature.
+
+## Security hardening — post-pickup signup (follow-up review)
+
+A guest's tracking QR alone must not be sufficient to attach a completed order to a newly created account. A guest who successfully calls `guest-confirm-pickup` now gets a session-bound `guest_pickup_claim` marker containing the order ID, existing tracking token hash and server confirmation timestamp. This marker expires after 60 minutes, is cleared on entering a new guest tracking session or logging out of guest tracking, and is checked server-side by `membership_claim()` and therefore by `self-order-join`. The signup prompt on the completed guest tracking portal only appears while eligible. Linking the order still revokes its tracking token hash. Regular immediate post-checkout signup stays supported.
+
+### Additional test cases on Angsila
+
+1. In guest session A, confirm an order from `ready` to `picked_up`; signup link appears; follow it and create a new account; history and revoked old QR verified.
+2. In a **different incognito session B**, open the **same** QR after pickup and enter guest portal: the signup button must **not** appear. A direct attempt to load `join-after-order` must show unavailable.
+3. In session A, after confirming pickup, click guest logout and reopen the QR: signup must no longer be possible from that session.
+4. Fresh guest checkout without pickup still offers the original immediate signup process.
+5. Test member order creation and admin status transitions as before.
+
+**Still pending for public production**: session-independent anti-spam/rate limiting, stronger hand-off identity verification at pickup, email ownership verification. QR remains a bearer credential for tracking and pickup actions; the same-session requirement only restricts account linking *after* pickup.
