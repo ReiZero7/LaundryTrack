@@ -13,6 +13,43 @@ try {
     }
     $page = $_GET['page'] ?? 'home';
     if (!is_string($page) || !preg_match('/^[a-z-]+$/', $page)) $page = 'home';
+
+    // Authenticated, read-only endpoint for customer in-page notifications.
+    if ($page === 'notifications-feed') {
+        header('Content-Type: application/json; charset=utf-8');
+        header('Cache-Control: private, no-store, max-age=0');
+        header('X-Robots-Tag: noindex, nofollow');
+        if (!current_user()) {
+            http_response_code(401);
+            echo json_encode(['error' => 'unauthorized']);
+            exit;
+        }
+        if (is_admin()) {
+            http_response_code(403);
+            echo json_encode(['error' => 'customer_only']);
+            exit;
+        }
+
+        $customerId = (int) current_user()['id'];
+        $stmt = db()->prepare("SELECT COUNT(*) FROM laundry__orders_tbl WHERE customer_id=? AND status='ready'");
+        $stmt->execute([$customerId]);
+        $readyCount = (int) $stmt->fetchColumn();
+
+        $stmt = db()->prepare("SELECT id, order_no FROM laundry__orders_tbl WHERE customer_id=? AND status='ready' ORDER BY id DESC LIMIT 10");
+        $stmt->execute([$customerId]);
+        $readyOrders = [];
+        foreach ($stmt->fetchAll() as $readyOrder) {
+            $readyOrders[] = [
+                'id' => (int) $readyOrder['id'],
+                'order_no' => (string) $readyOrder['order_no'],
+            ];
+        }
+        echo json_encode(
+            ['ready_count' => $readyCount, 'orders' => $readyOrders],
+            JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+        );
+        exit;
+    }
     if (current_user() && in_array($page, ['home', 'login', 'register'], true)) go('dashboard');
     $publicPages = ['home', 'login', 'register'];
     if (!in_array($page, $publicPages, true)) require_login();
