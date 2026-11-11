@@ -194,15 +194,15 @@ function process_action(): never {
                     }
                     $token = $member ? null : bin2hex(random_bytes(32));
                     $orderNo = 'LT-' . date('ymd') . '-' . strtoupper(bin2hex(random_bytes(6)));
-                    $stmt = $pdo->prepare('INSERT INTO laundry__orders_tbl(order_no,customer_id,created_by,due_at,total_amount,notes,tracking_token_hash) VALUES(?,?,?,?,?,?,?)');
+                    $stmt = $pdo->prepare("INSERT INTO laundry__orders_tbl(order_no,customer_id,created_by,due_at,total_amount,notes,tracking_token_hash,status) VALUES(?,?,?,?,?,?,?,'requested')");
                     $stmt->execute([$orderNo, $customerId, $customerId, $dueDate->format('Y-m-d H:i:s'),
                         number_format(round($total, 2), 2, '.', ''), $notes ?: null,
                         $token === null ? null : tracking_hash($token)]);
                     $orderId = (int)$pdo->lastInsertId();
                     $insert = $pdo->prepare('INSERT INTO laundry__order_items_tbl(order_id,service_id,quantity,unit_price,subtotal) VALUES(?,?,?,?,?)');
                     foreach ($items as $item) $insert->execute(array_merge([$orderId], $item));
-                    $pdo->prepare("INSERT INTO laundry__status_history_tbl(order_id,changed_by,old_status,new_status,note) VALUES(?,?,NULL,'received',?)")
-                        ->execute([$orderId, $customerId, 'ลูกค้าสร้างออร์เดอร์ผ่านเว็บไซต์ กรุณานำผ้ามาส่งที่ร้าน']);
+                    $pdo->prepare("INSERT INTO laundry__status_history_tbl(order_id,changed_by,old_status,new_status,note) VALUES(?,?,NULL,'requested',?)")
+                        ->execute([$orderId, $customerId, 'ลูกค้าสร้างคำขอสั่งบริการ กรุณานำผ้ามาส่งที่ร้าน']);
                     $pdo->commit();
 
                     if ($member) {
@@ -229,12 +229,9 @@ function process_action(): never {
             case 'self-order-join':
                 // Claim only an order created in this browser session with its secret token.
                 if (current_user()) go('dashboard');
-                $pending = $_SESSION['new_self_order'] ?? null;
-                if (!is_array($pending) || !is_int($pending['order_id'] ?? null)
-                    || !is_int($pending['customer_id'] ?? null)
-                    || !is_string($pending['token_hash'] ?? null)
-                    || !preg_match('/^[a-f0-9]{64}$/D', $pending['token_hash'])) {
-                    flash('ไม่พบออร์เดอร์สำหรับสมัครสมาชิก', 'error');
+                $pending = membership_claim();
+                if (!$pending) {
+                    flash('ไม่พบออร์เดอร์ที่สามารถเชื่อมกับบัญชีใหม่ได้', 'error');
                     go('order-start');
                 }
                 $email = strtolower(post_string('email'));
@@ -279,7 +276,7 @@ function process_action(): never {
                     }
                     if ($e instanceof DomainException) {
                         flash('ไม่สามารถเชื่อมออร์เดอร์ได้ กรุณาตรวจสอบอีกครั้ง', 'error');
-                        go('order-complete');
+                        go('join-after-order');
                     }
                     throw $e;
                 }
@@ -449,6 +446,7 @@ function process_action(): never {
                 $orderId = post_int('id');
                 $next = post_string('status');
                 $transitions = [
+                    'requested' => ['received', 'cancelled'],
                     'received' => ['washing', 'cancelled'],
                     'washing' => ['drying'],
                     'drying' => ['ready'],
@@ -466,10 +464,9 @@ function process_action(): never {
                     $orderState = $stmt->fetch();
                     $current = $orderState['status'] ?? null;
                     if (!$current || !in_array($next, $transitions[(string)$current] ?? [], true)) throw new DomainException('Invalid status transition');
-                    // Customer-created orders require acknowledgement of physical laundry receipt.
-                    if ($current === 'received' && $next === 'washing'
-                        && $orderState['creator_role'] === 'customer' && post_string('dropoff_confirmed') !== 'yes') {
-                        throw new DomainException('Laundry must be physically received before washing');
+                    // Physical drop-off must be verified on requested -> received; no skipping.
+                    if ($current === 'requested' && $next === 'received' && post_string('dropoff_confirmed') !== 'yes') {
+                        throw new DomainException('Staff must verify physical laundry receipt');
                     }
                     $pdo->prepare('UPDATE laundry__orders_tbl SET status=? WHERE id=?')->execute([$next, $orderId]);
                     $pdo->prepare('INSERT INTO laundry__status_history_tbl(order_id,changed_by,old_status,new_status) VALUES(?,?,?,?)')->execute([$orderId, current_user()['id'], $current, $next]);
