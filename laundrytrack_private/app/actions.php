@@ -15,20 +15,137 @@ function process_action(): never {
                 $name = post_string('full_name');
                 $email = strtolower(post_string('email'));
                 $phone = post_string('phone');
-                $password = post_string('password');$password = is_string($_POST['password'] ?? null)
-                ? $_POST['password']
-                : '';
-                if (text_length($name) < 2 || text_length($name) > 100 || !filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($email) > 150 || text_length($phone) > 20 || strlen($password) < 8) {
-                    flash('กรอกชื่อ อีเมล และรหัสผ่านอย่างน้อย 8 ตัวอักษรให้ถูกต้อง', 'error'); go('register');
+                $password = is_string($_POST['password'] ?? null) ? $_POST['password'] : '';
+                if (text_length($name) < 2 || text_length($name) > 100
+                    || !filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($email) > 150
+                    || text_length($phone) > 20 || strlen($password) < 8 || strlen($password) > 4096) {
+                    flash('กรอกชื่อ อีเมล และรหัสผ่านอย่างน้อย 8 ตัวอักษรให้ถูกต้อง', 'error');
+                    go('register');
                 }
-                $stmt = db()->prepare('INSERT INTO laundry__users_tbl(full_name, email, phone, password_hash, role) VALUES(?,?,?,?,\'customer\')');
+                $pdo = db();
+                $pdo->beginTransaction();
                 try {
+                    $stmt = $pdo->prepare("INSERT INTO laundry__users_tbl
+                        (full_name,email,phone,password_hash,role,email_verified_at)
+                        VALUES(?,?,?,?,'customer',NULL)");
                     $stmt->execute([$name, $email, $phone ?: null, password_hash($password, PASSWORD_DEFAULT)]);
-                } catch (PDOException $e) {
-                    if ($e->getCode() === '23000') { flash('อีเมลนี้ถูกใช้งานแล้ว', 'error'); go('register'); }
+                    $rawVerificationToken = create_email_verification($pdo, (int)$pdo->lastInsertId());
+                    $pdo->commit();
+                } catch (Throwable $e) {
+                    if ($pdo->inTransaction()) $pdo->rollBack();
+                    if ($e instanceof PDOException && $e->getCode() === '23000') {
+                        flash('อีเมลนี้ถูกใช้งานแล้ว หากยังไม่ยืนยันอีเมล ให้ขอลิงก์ใหม่', 'error');
+                        go('resend-verification');
+                    }
                     throw $e;
                 }
-                flash('สมัครสมาชิกสำเร็จ กรุณาเข้าสู่ระบบ'); go('login');
+                if (!send_email_verification($email, $rawVerificationToken)) {
+                    flash('สร้างบัญชีแล้ว แต่ระบบส่งอีเมลไม่สำเร็จ กรุณาใช้หน้าขอลิงก์ใหม่ภายหลังหรือติดต่อร้าน', 'error');
+                } else {
+                    flash('สร้างบัญชีแล้ว กรุณาเปิดอีเมลและกดยืนยันก่อนเข้าสู่ระบบ');
+                }
+                go('verify-email-sent');
+            case 'resend-email-verification':
+                if (current_user()) go('dashboard');
+                $email = strtolower(post_string('email'));
+                if (!filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($email) > 150) {
+                    flash('หากบัญชียังไม่ได้ยืนยัน ระบบจะส่งลิงก์ใหม่ให้เมื่อครบเวลาที่กำหนด');
+                    go('verify-email-sent');
+                }
+                $pdo = db();
+                $rawVerificationToken = null;
+                $pdo->beginTransaction();
+                try {
+                    $stmt = $pdo->prepare("SELECT u.id,v.sent_at,v.send_count,v.send_window_started_at,
+                        (v.sent_at <= UTC_TIMESTAMP() - INTERVAL 10 MINUTE) AS interval_ok,
+                        (v.send_window_started_at <= UTC_TIMESTAMP() - INTERVAL 1 DAY) AS new_window
+                        FROM laundry__users_tbl u
+                        JOIN laundry__email_verifications_tbl v ON v.user_id=u.id
+                        WHERE u.email=? AND u.role='customer' AND u.email_verified_at IS NULL
+                        FOR UPDATE");
+                    $stmt->execute([$email]);
+                    $record = $stmt->fetch();
+                    if ($record && (int)$record['interval_ok'] === 1
+                        && ((int)$record['new_window'] === 1 || (int)$record['send_count'] < 5)) {
+                        $rawVerificationToken = bin2hex(random_bytes(32));
+                        $stmt = $pdo->prepare("UPDATE laundry__email_verifications_tbl
+                            SET token_hash=?, expires_at=UTC_TIMESTAMP() + INTERVAL 24 HOUR,
+                                sent_at=UTC_TIMESTAMP(),
+                                send_count=IF(send_window_started_at <= UTC_TIMESTAMP() - INTERVAL 1 DAY,1,send_count+1),
+                                send_window_started_at=IF(send_window_started_at <= UTC_TIMESTAMP() - INTERVAL 1 DAY,
+                                                           UTC_TIMESTAMP(),send_window_started_at)
+                            WHERE user_id=?");
+                        $stmt->execute([email_verification_hash($rawVerificationToken), (int)$record['id']]);
+                    }
+                    $pdo->commit();
+                } catch (Throwable $e) {
+                    if ($pdo->inTransaction()) $pdo->rollBack();
+                    throw $e;
+                }
+                if ($rawVerificationToken !== null) send_email_verification($email, $rawVerificationToken);
+                // Uniform result: do not expose whether this address is registered.
+                flash('หากอีเมลนี้มีบัญชีที่รอยืนยันและครบเวลาที่กำหนด ระบบจะส่งลิงก์ใหม่ให้');
+                go('verify-email-sent');
+            case 'email-verify':
+                if (current_user()) go('dashboard');
+                $tokenHash = email_verification_hash(post_string('token'));
+                if ($tokenHash === null) {
+                    flash('ลิงก์ยืนยันไม่ถูกต้อง', 'error');
+                    go('verify-email-sent');
+                }
+                $pdo = db();
+                $pdo->beginTransaction();
+                try {
+                    $stmt = $pdo->prepare("SELECT v.user_id,v.claimed_order_id,v.claimed_customer_id,
+                            v.claimed_token_hash
+                        FROM laundry__email_verifications_tbl v
+                        JOIN laundry__users_tbl u ON u.id=v.user_id
+                        WHERE v.token_hash=? AND v.expires_at > UTC_TIMESTAMP()
+                          AND u.role='customer' AND u.email_verified_at IS NULL
+                        FOR UPDATE");
+                    $stmt->execute([$tokenHash]);
+                    $verify = $stmt->fetch();
+                    if (!$verify) throw new DomainException('Expired or already used email token');
+                    $pdo->prepare("UPDATE laundry__users_tbl SET email_verified_at=UTC_TIMESTAMP()
+                        WHERE id=? AND role='customer' AND email_verified_at IS NULL")
+                        ->execute([(int)$verify['user_id']]);
+                    $linkedOrder = null;
+                    $claimFailed = false;
+                    if ($verify['claimed_order_id'] !== null) {
+                        $stmt = $pdo->prepare("UPDATE laundry__orders_tbl
+                            SET customer_id=?,tracking_token_hash=NULL
+                            WHERE id=? AND customer_id=? AND tracking_token_hash=?");
+                        $stmt->execute([
+                            (int)$verify['user_id'], (int)$verify['claimed_order_id'],
+                            (int)$verify['claimed_customer_id'], $verify['claimed_token_hash'],
+                        ]);
+                        if ($stmt->rowCount() === 1) {
+                            $linkedOrder = (int)$verify['claimed_order_id'];
+                        } else {
+                            // Email verification is valid even if a QR was rotated or claimed.
+                            $claimFailed = true;
+                            error_log('[LaundryTrack] Email verified but guest order claim no longer available');
+                        }
+                    }
+                    $pdo->prepare('DELETE FROM laundry__email_verifications_tbl WHERE user_id=?')
+                        ->execute([(int)$verify['user_id']]);
+                    $pdo->commit();
+                    if ($claimFailed) {
+                        flash('ยืนยันอีเมลสำเร็จ แต่ไม่สามารถเชื่อมออร์เดอร์เดิมได้ กรุณาติดต่อร้าน', 'error');
+                    } elseif ($linkedOrder !== null) {
+                        flash('ยืนยันอีเมลและเชื่อมออร์เดอร์เรียบร้อย กรุณาเข้าสู่ระบบ');
+                    } else {
+                        flash('ยืนยันอีเมลสำเร็จ กรุณาเข้าสู่ระบบ');
+                    }
+                    go('login');
+                } catch (Throwable $e) {
+                    if ($pdo->inTransaction()) $pdo->rollBack();
+                    if ($e instanceof DomainException) {
+                        flash('ลิงก์ยืนยันหมดอายุหรือถูกใช้งานแล้ว กรุณาขอลิงก์ใหม่', 'error');
+                        go('resend-verification');
+                    }
+                    throw $e;
+                }
             case 'login':
                 if (current_user()) go('dashboard');
                 // Whitelist internal destination; never accept a free-form redirect URL.
@@ -37,14 +154,18 @@ function process_action(): never {
                 $password = is_string($_POST['password'] ?? null)
     			? $_POST['password']
     			: '';
-                $stmt = db()->prepare('SELECT id, full_name, email, role, password_hash FROM laundry__users_tbl WHERE email = ? LIMIT 1');
+                $stmt = db()->prepare('SELECT id, full_name, email, role, password_hash, email_verified_at FROM laundry__users_tbl WHERE email = ? LIMIT 1');
                 $stmt->execute([$email]);
                 $user = $stmt->fetch();
                 if (!$user || !password_verify($password, $user['password_hash'])) {
                     flash('อีเมลหรือรหัสผ่านไม่ถูกต้อง', 'error'); go('login', $nextPage === 'self-order' ? ['next' => 'self-order'] : []);
                 }
+                if ($user['role'] === 'customer' && empty($user['email_verified_at'])) {
+                    flash('กรุณายืนยันอีเมลของคุณก่อนเข้าสู่ระบบ หากลิงก์หมดอายุให้ขอลิงก์ใหม่', 'error');
+                    go('resend-verification');
+                }
                 session_regenerate_id(true);
-                unset($user['password_hash']);
+                unset($user['password_hash'], $user['email_verified_at']);
                 $_SESSION['user'] = $user;
                 unset($_SESSION['guest_track'], $_SESSION['guest_pickup_claim']);
                 $_SESSION['csrf'] = bin2hex(random_bytes(32));
@@ -263,21 +384,25 @@ function process_action(): never {
                     $stmt->execute([$guest['full_name'], $email, $guest['phone'],
                         password_hash($password, PASSWORD_DEFAULT)]);
                     $accountId = (int)$pdo->lastInsertId();
-                    // The old guest QR is revoked. Authenticated member portal now owns the order.
-                    $stmt = $pdo->prepare('UPDATE laundry__orders_tbl SET customer_id=?, tracking_token_hash=NULL WHERE id=? AND customer_id=? AND tracking_token_hash=?');
-                    $stmt->execute([$accountId, $pending['order_id'], $pending['customer_id'], $pending['token_hash']]);
-                    if ($stmt->rowCount() !== 1) throw new DomainException('Order transfer failed');
+                    // Do NOT transfer ownership or revoke the guest QR until
+                    // the new account proves ownership of its email.
+                    $rawVerificationToken = create_email_verification($pdo, $accountId, [
+                        'order_id' => (int)$pending['order_id'],
+                        'customer_id' => (int)$pending['customer_id'],
+                        'token_hash' => $pending['token_hash'],
+                    ]);
                     $pdo->commit();
-                    unset($_SESSION['new_self_order'], $_SESSION['guest_track'], $_SESSION['guest_pickup_claim']);
-                    session_regenerate_id(true);
-                    $_SESSION['csrf'] = bin2hex(random_bytes(32));
-                    $_SESSION['user'] = ['id' => $accountId, 'full_name' => $guest['full_name'], 'email' => $email, 'role' => 'customer'];
-                    flash('สมัครสมาชิกสำเร็จ ออร์เดอร์ของคุณเชื่อมกับบัญชีใหม่แล้ว');
-                    go('order', ['id' => (int)$guest['id']]);
+                    if (!send_email_verification($email, $rawVerificationToken)) {
+                        flash('สร้างบัญชีที่รอยืนยันแล้ว แต่ส่งอีเมลไม่สำเร็จ กรุณาขอลิงก์ใหม่หรือติดต่อร้าน', 'error');
+                    } else {
+                        flash('ส่งอีเมลยืนยันแล้ว กรุณายืนยันอีเมลเพื่อเชื่อมออร์เดอร์และเข้าสู่ระบบ');
+                    }
+                    // Keep the guest QR valid until verification is completed.
+                    go('verify-email-sent');
                 } catch (Throwable $e) {
                     if ($pdo->inTransaction()) $pdo->rollBack();
                     if ($e instanceof PDOException && $e->getCode() === '23000') {
-                        flash('อีเมลนี้มีบัญชีอยู่แล้ว กรุณาใช้อีเมลอื่นหรือติดต่อร้าน', 'error');
+                        flash('บัญชีหรือออร์เดอร์นี้มีคำขอสมัครสมาชิกแล้ว กรุณาตรวจอีเมลหรือขอลิงก์ใหม่', 'error');
                         go('join-after-order');
                     }
                     if ($e instanceof DomainException) {
