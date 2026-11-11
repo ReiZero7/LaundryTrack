@@ -50,12 +50,32 @@ function db(): PDO {
     return $pdo;
 }
 
+/** Reject idle or overlong sessions using server-side timestamps. */
+function session_is_expired(array $session, int $now): bool {
+    $started = $session['session_started_at'] ?? $now;
+    $lastSeen = $session['session_last_seen'] ?? $now;
+    if (!is_int($started) || !is_int($lastSeen)) return true;
+    if ($started > $now || $lastSeen > $now) return true;
+    return ($now - $lastSeen > 3600) || ($now - $started > 43200);
+}
+
 if (PHP_SAPI !== 'cli') {
     ini_set('session.use_strict_mode', '1');
+    ini_set('session.use_only_cookies', '1');
+    ini_set('session.gc_maxlifetime', '43200');
     $https = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
     session_name('laundrytrack_session');
     session_set_cookie_params(['httponly' => true, 'secure' => $https, 'samesite' => 'Lax', 'path' => '/']);
     session_start();
+    $sessionNow = time();
+    if (session_is_expired($_SESSION, $sessionNow)) {
+        // Expired sessions lose authenticated, guest and checkout privileges.
+        $_SESSION = [];
+        session_regenerate_id(true);
+        $_SESSION['csrf'] = bin2hex(random_bytes(32));
+    }
+    $_SESSION['session_started_at'] ??= $sessionNow;
+    $_SESSION['session_last_seen'] = $sessionNow;
     header('X-Content-Type-Options: nosniff');
     header('Referrer-Policy: strict-origin-when-cross-origin');
     header('X-Frame-Options: DENY');
@@ -93,7 +113,11 @@ function csrf_field(): string {
     return '<input type="hidden" name="csrf" value="' . e(csrf_token()) . '">';
 }
 function require_csrf(): void {
-    if (!hash_equals((string) ($_SESSION['csrf'] ?? ''), (string) ($_POST['csrf'] ?? '')) || empty($_SESSION['csrf'])) {
+    // A multipart field like csrf[]=... must be rejected, not cast to "Array".
+    $provided = $_POST['csrf'] ?? null;
+    $expected = $_SESSION['csrf'] ?? null;
+    if (!is_string($provided) || !is_string($expected) || $expected === ''
+        || !hash_equals($expected, $provided)) {
         http_response_code(419);
         exit('Invalid CSRF token. Refresh the page and try again.');
     }
@@ -207,6 +231,66 @@ function order_progress_stage(string $status): int {
         'cancelled' => 0,
     ][$status] ?? 0;
 }
+/**
+ * Persistent login-attempt limiter using the existing, private MySQL rate-limit table.
+ * All attempts count (including successful logins); this avoids account enumeration.
+ * Distinct account and REMOTE_ADDR quotas reduce distributed password guessing.
+ * We never trust X-Forwarded-For headers and never store emails or IPs in plaintext.
+ * Quotas: 60 requests per IP and 12 per account/email in a 15-minute window.
+ * Missing secret/database fails closed before password verification.
+ */
+function login_rate_limit_allowed(string $email): bool {
+    $secret = setting('RATE_LIMIT_SECRET');
+    $ip = $_SERVER['REMOTE_ADDR'] ?? '';
+    if (strlen($secret) < 32 || !is_string($ip)
+        || !filter_var($ip, FILTER_VALIDATE_IP)) {
+        error_log('[LaundryTrack] Login limiter missing valid secret or REMOTE_ADDR');
+        return false;
+    }
+    $identities = [
+        ['login-ip-15m', hash_hmac('sha256', 'login-ip:' . $ip, $secret), 60],
+        ['login-email-15m', hash_hmac('sha256', 'login-email:' . strtolower(trim($email)), $secret), 12],
+    ];
+    $now = time();
+    try {
+        $pdo = db();
+        $pdo->beginTransaction();
+        try {
+            $seed = $pdo->prepare("INSERT INTO laundry__order_rate_limits_tbl
+                (scope, identity_hash, window_started_at, attempt_count)
+                VALUES(?,?,?,0) ON DUPLICATE KEY UPDATE identity_hash=identity_hash");
+            $read = $pdo->prepare("SELECT window_started_at, attempt_count
+                FROM laundry__order_rate_limits_tbl WHERE scope=? AND identity_hash=? FOR UPDATE");
+            $write = $pdo->prepare("UPDATE laundry__order_rate_limits_tbl
+                SET window_started_at=?, attempt_count=? WHERE scope=? AND identity_hash=?");
+            $updates = [];
+            foreach ($identities as [$scope, $hash, $max]) {
+                $seed->execute([$scope, $hash, $now]);
+                $read->execute([$scope, $hash]);
+                $counter = $read->fetch();
+                if (!$counter) throw new RuntimeException('Missing login quota counter');
+                $start = (int)$counter['window_started_at'];
+                $count = (int)$counter['attempt_count'];
+                $active = $start <= $now && $now - $start < 900;
+                if ($active && $count >= $max) {
+                    $pdo->rollBack();
+                    return false;
+                }
+                $updates[] = [$active ? $start : $now, $active ? $count + 1 : 1, $scope, $hash];
+            }
+            foreach ($updates as $row) $write->execute($row);
+            $pdo->commit();
+            return true;
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            throw $e;
+        }
+    } catch (Throwable $e) {
+        error_log('[LaundryTrack] Login rate limit unavailable: ' . $e->getMessage());
+        return false;
+    }
+}
+
 /**
  * Persistent, cross-session order throttling.
  *

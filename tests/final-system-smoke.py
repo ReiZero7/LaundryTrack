@@ -340,4 +340,26 @@ ok(count("SELECT COUNT(*) FROM laundry__status_history_tbl "
          "WHERE order_id=%d AND new_status='picked_up'" % member_id) == 1,
    "duplicate staff confirmation creates no duplicate history")
 
+# Account-level login lockout after repeated guesses, without exposing account existence.
+attacker = Browser()
+for i in range(13):
+    code, url, page = attacker.post({
+        "action": "login", "email": "nonexistent-locked@example.test",
+        "password": "incorrect-password",
+    }, "login")
+    ok(code == 200 and "page=login" in url,
+       "invalid login attempt returns login page (%d)" % (i + 1))
+    if i == 12:
+        ok("มากเกินไป" in page,
+           "thirteenth login attempt receives generic temporary quota message")
+
+# A different account must not be blocked by that account-level lockout.
+independent = Browser()
+code, url, page = independent.post({
+    "action": "login", "email": "member-a@example.test",
+    "password": "member-a-passphrase",
+}, "login")
+ok(code == 200 and "page=progress" in url,
+   "unrelated valid account still logs in after account-specific lockout")
+
 print("ALL FINAL SYSTEM HTTP SMOKE TESTS PASSED: %d checks" % total)
