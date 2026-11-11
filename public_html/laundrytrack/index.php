@@ -56,7 +56,9 @@ try {
         header('X-Robots-Tag: noindex, nofollow');
         if (!current_user()) { http_response_code(401); echo '{"error":"unauthorized"}'; exit; }
         if (is_admin()) { http_response_code(403); echo '{"error":"customer_only"}'; exit; }
-        $stmt = db()->prepare("SELECT id,status FROM laundry__orders_tbl WHERE customer_id=? ORDER BY id DESC LIMIT 30");
+        $stmt = db()->prepare("SELECT o.id,o.status,(pr.order_id IS NOT NULL) AS pickup_requested
+            FROM laundry__orders_tbl o LEFT JOIN laundry__pickup_requests_tbl pr ON pr.order_id=o.id
+            WHERE o.customer_id=? ORDER BY o.id DESC LIMIT 30");
         $stmt->execute([(int)current_user()['id']]);
         $out = [];
         foreach ($stmt->fetchAll() as $order) {
@@ -65,6 +67,7 @@ try {
                 'status' => (string)$order['status'],
                 'label' => status_label((string)$order['status']),
                 'stage' => order_progress_stage((string)$order['status']),
+                'pickup_requested' => (bool)$order['pickup_requested'],
             ];
         }
         echo json_encode(['orders' => $out], JSON_UNESCAPED_UNICODE);
@@ -84,7 +87,8 @@ try {
             'id' => (int)$trackedOrder['id'],
             'status' => $trackedOrder['status'],
             'status_label' => order_status_label($trackedOrder['status'], $trackedOrder['creator_role']),
-            'ready' => $trackedOrder['status'] === 'ready'
+            'ready' => $trackedOrder['status'] === 'ready',
+            'pickup_requested' => $trackedOrder['pickup_requested_at'] !== null
         ], JSON_UNESCAPED_UNICODE);
         exit;
     }
