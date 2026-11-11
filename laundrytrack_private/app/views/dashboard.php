@@ -8,8 +8,36 @@ $stats = $stmt->fetch();
 $stmt = db()->prepare('SELECT o.id,o.order_no,o.received_at,o.status,o.total_amount,u.full_name FROM laundry__orders_tbl o JOIN laundry__users_tbl u ON u.id=o.customer_id' . ($admin ? '' : ' WHERE o.customer_id=?') . ' ORDER BY o.id DESC LIMIT 6');
 $stmt->execute($admin ? [] : [$userId]);
 $recent = $stmt->fetchAll();
+$readyNotifications = [];
+if (!$admin && (int)$stats['ready_count'] > 0) {
+    $stmt = db()->prepare("SELECT id, order_no FROM laundry__orders_tbl WHERE customer_id=? AND status='ready' ORDER BY id DESC LIMIT 10");
+    $stmt->execute([$userId]);
+    $readyNotifications = $stmt->fetchAll();
+}
 ?>
 <div class="page-heading"><div><p class="eyebrow">OVERVIEW</p><h1>สวัสดี, <?= e(current_user()['full_name']) ?> 👋</h1><p>ภาพรวมรายการซักรีดและความคืบหน้าล่าสุด</p></div><?php if ($admin): ?><a class="btn btn-primary" href="<?= e(url('new-order')) ?>">+ สร้างออร์เดอร์</a><?php endif; ?></div>
+<?php if (!$admin && $readyNotifications): ?>
+<section class="pickup-notice" role="status">
+    <div class="pickup-notice-title">
+        <span class="pickup-notice-icon" aria-hidden="true">🔔</span>
+        <div>
+            <h2>ผ้าของคุณพร้อมรับแล้ว!</h2>
+            <p>มี <?= (int)$stats['ready_count'] ?> ออร์เดอร์พร้อมรับผ้า กรุณายืนยันหลังจากได้รับผ้าจริง</p>
+        </div>
+    </div>
+    <div class="pickup-notice-list">
+        <?php foreach ($readyNotifications as $notice): ?>
+        <div class="pickup-notice-item">
+            <strong><?= e($notice['order_no']) ?></strong>
+            <a class="btn btn-primary" href="<?= e(url('order', ['id' => (int)$notice['id']])) ?>">ดูรายละเอียดและยืนยันรับผ้า</a>
+        </div>
+        <?php endforeach; ?>
+    </div>
+    <?php if ((int)$stats['ready_count'] > count($readyNotifications)): ?>
+        <a class="text-link" href="<?= e(url('orders', ['status' => 'ready'])) ?>">ดูออร์เดอร์ที่พร้อมรับทั้งหมด</a>
+    <?php endif; ?>
+</section>
+<?php endif; ?>
 <div class="metric-grid">
     <div class="metric-card"><p>ออร์เดอร์ทั้งหมด</p><strong><?= (int)$stats['total'] ?></strong><span>รายการในระบบ</span><div class="metric-icon">▤</div></div>
     <div class="metric-card"><p>กำลังดำเนินการ</p><strong><?= (int)$stats['processing'] ?></strong><span>รับแล้ว / กำลังซัก / พร้อมรับ</span><div class="metric-icon">↺</div></div>
