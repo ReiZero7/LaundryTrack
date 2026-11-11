@@ -20,7 +20,7 @@ if ($valid) {
 <?php $link = tracking_link($token); ?>
 <div class="page-heading"><div><p class="eyebrow">ORDER SUCCESS</p>
 <h1>สร้างออร์เดอร์สำเร็จ ✓</h1>
-<p>กรุณานำผ้ามาส่งที่ร้านตามขั้นตอน รายการนี้ยังไม่ยืนยันว่าได้รับผ้าแล้ว</p>
+<p>รายการนี้เป็นคำขอซักรีด กรุณานำผ้ามาส่งให้ร้านยืนยันรับผ้าจริง</p>
 </div></div>
 <section class="panel guest-tracking-card">
     <div class="panel-header"><h2>หมายเลข <?= e($order['order_no']) ?></h2><span class="status <?= e(status_class($order['status'])) ?>"><?= e(order_status_label($order['status'], 'customer')) ?></span></div>
