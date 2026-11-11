@@ -158,6 +158,35 @@ function process_action(): never {
                     if ($e instanceof DomainException) { flash('ข้อมูลออร์เดอร์ไม่ถูกต้อง กรุณาตรวจสอบอีกครั้ง', 'error'); go('new-order'); }
                     throw $e;
                 }
+            case 'order-confirm-pickup':
+                require_login();
+                // Only a customer can confirm their own ready order.
+                if (is_admin()) { http_response_code(403); exit('Forbidden'); }
+                $orderId = post_int('id');
+                if ($orderId < 1) { flash('หมายเลขออร์เดอร์ไม่ถูกต้อง', 'error'); go('orders'); }
+
+                $pdo = db();
+                $pdo->beginTransaction();
+                try {
+                    // Atomic conditional update prevents other customers and duplicate confirmations.
+                    $stmt = $pdo->prepare("UPDATE laundry__orders_tbl SET status='picked_up' WHERE id=? AND customer_id=? AND status='ready'");
+                    $stmt->execute([$orderId, current_user()['id']]);
+                    if ($stmt->rowCount() !== 1) throw new DomainException('Order not ready or not owned by customer');
+
+                    $pdo->prepare("INSERT INTO laundry__status_history_tbl(order_id,changed_by,old_status,new_status,note) VALUES(?,?,'ready','picked_up',?)")
+                        ->execute([$orderId, current_user()['id'], 'ลูกค้ายืนยันว่าได้รับผ้าแล้ว']);
+
+                    $pdo->commit();
+                    flash('ยืนยันรับผ้าเรียบร้อย ขอบคุณที่ใช้บริการ');
+                    go('order', ['id' => $orderId]);
+                } catch (Throwable $e) {
+                    if ($pdo->inTransaction()) $pdo->rollBack();
+                    if ($e instanceof DomainException) {
+                        flash('ไม่สามารถยืนยันรับผ้าได้ กรุณาตรวจสอบสถานะออร์เดอร์ของคุณ', 'error');
+                        go('orders');
+                    }
+                    throw $e;
+                }
             case 'order-status':
                 require_admin();
                 $orderId = post_int('id');
@@ -166,7 +195,7 @@ function process_action(): never {
                     'received' => ['washing', 'cancelled'],
                     'washing' => ['drying'],
                     'drying' => ['ready'],
-                    'ready' => ['picked_up'],
+                    // Customer alone confirms ready -> picked_up.
                     'picked_up' => [],
                     'cancelled' => [],
                 ];
