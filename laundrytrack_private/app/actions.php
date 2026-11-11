@@ -89,16 +89,34 @@ function process_action(): never {
                 $phone = post_string('phone');
                 $email = strtolower(post_string('email'));
                 $password = post_string('password');
-                if (text_length($name) < 2 || text_length($name) > 100 || !filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($email) > 150 || text_length($phone) > 20 || ($id === 0 && strlen($password) < 8) || ($password !== '' && strlen($password) < 8)) {
-                    flash('ข้อมูลลูกค้าไม่ถูกต้อง (รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร)', 'error'); go('customers');
+                $existingCustomer = null;
+                if ($id > 0) {
+                    $lookup = db()->prepare("SELECT email FROM laundry__users_tbl WHERE id=? AND role='customer'");
+                    $lookup->execute([$id]);
+                    $existingCustomer = $lookup->fetch();
+                    if (!$existingCustomer) { flash('ไม่พบลูกค้าที่ต้องการแก้ไข', 'error'); go('customers'); }
+                }
+                $isWalkin = $existingCustomer && $existingCustomer['email'] === null;
+                if (text_length($name) < 2 || text_length($name) > 100 || text_length($phone) > 20
+                    || (!$isWalkin && (!filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($email) > 150))
+                    || ($isWalkin && ($email !== '' || $password !== ''))
+                    || ($id === 0 && strlen($password) < 8)
+                    || ($password !== '' && strlen($password) < 8)) {
+                    flash('ข้อมูลลูกค้าไม่ถูกต้อง (ลูกค้าหน้าร้านไม่ต้องกรอกอีเมล/รหัสผ่าน)', 'error');
+                    go('customers');
                 }
                 try {
                     if ($id > 0) {
-                        $stmt = db()->prepare('UPDATE laundry__users_tbl SET full_name=?, phone=?, email=? WHERE id=? AND role=\'customer\'');
-                        $stmt->execute([$name, $phone ?: null, $email, $id]);
-                        if ($password !== '') db()->prepare('UPDATE laundry__users_tbl SET password_hash=? WHERE id=? AND role=\'customer\'')->execute([password_hash($password, PASSWORD_DEFAULT), $id]);
+                        if ($isWalkin) {
+                            $stmt = db()->prepare("UPDATE laundry__users_tbl SET full_name=?,phone=? WHERE id=? AND role='customer' AND email IS NULL");
+                            $stmt->execute([$name, $phone ?: null, $id]);
+                        } else {
+                            $stmt = db()->prepare("UPDATE laundry__users_tbl SET full_name=?,phone=?,email=? WHERE id=? AND role='customer' AND email IS NOT NULL");
+                            $stmt->execute([$name, $phone ?: null, $email, $id]);
+                            if ($password !== '') db()->prepare("UPDATE laundry__users_tbl SET password_hash=? WHERE id=? AND role='customer' AND email IS NOT NULL")->execute([password_hash($password, PASSWORD_DEFAULT), $id]);
+                        }
                     } else {
-                        db()->prepare('INSERT INTO laundry__users_tbl(full_name,phone,email,password_hash,role) VALUES(?,?,?,?,\'customer\')')->execute([$name, $phone ?: null, $email, password_hash($password, PASSWORD_DEFAULT)]);
+                        db()->prepare("INSERT INTO laundry__users_tbl(full_name,phone,email,password_hash,role) VALUES(?,?,?,?,'customer')")->execute([$name, $phone ?: null, $email, password_hash($password, PASSWORD_DEFAULT)]);
                     }
                 } catch (PDOException $e) {
                     if ($e->getCode() === '23000') { flash('อีเมลนี้ถูกใช้งานแล้ว', 'error'); go('customers'); }
