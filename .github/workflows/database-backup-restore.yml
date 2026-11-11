@@ -58,6 +58,8 @@ jobs:
             < tests/fixtures/final-system-base.sql
           MYSQL_PWD=ci-local-only mysql -h 127.0.0.1 -P 3306 -u root laundrytrack_ci \
             < laundrytrack_private/migrations/2026-11-11_order_rate_limiting.sql
+          MYSQL_PWD=ci-local-only mysql -h 127.0.0.1 -P 3306 -u root laundrytrack_ci \
+            < laundrytrack_private/migrations/2026-11-11_staff_verified_pickup.sql
           MYSQL_PWD=ci-local-only mysql -h 127.0.0.1 -P 3306 -u root laundrytrack_ci -e "
             INSERT INTO laundry__users_tbl
               (id,full_name,email,phone,password_hash,role)
@@ -110,7 +112,7 @@ jobs:
             -e 'CREATE DATABASE laundrytrack_restore_ci CHARACTER SET utf8mb4'
           backup_file="$(cat /tmp/laundrytrack-ci-backup-file)"
           MYSQL_PWD=ci-local-only mysql -h 127.0.0.1 -P 3306 -u root "$restored_db" < "$backup_file"
-          for table in users services orders order_items status_history order_rate_limits; do
+          for table in users services orders order_items status_history order_rate_limits pickup_requests; do
             actual="laundry__$table""_tbl"
             original_count="$(MYSQL_PWD=ci-local-only mysql -N -B -h 127.0.0.1 -u root laundrytrack_ci -e "SELECT COUNT(*) FROM \`$actual\`")"
             restored_count="$(MYSQL_PWD=ci-local-only mysql -N -B -h 127.0.0.1 -u root "$restored_db" -e "SELECT COUNT(*) FROM \`$actual\`")"
