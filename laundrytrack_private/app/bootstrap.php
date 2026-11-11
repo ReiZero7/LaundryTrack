@@ -126,6 +126,27 @@ function mb_substr_safe(string $v, int $start, int $length): string {
     $chars = preg_split('//u', $v, -1, PREG_SPLIT_NO_EMPTY);
     return implode('', array_slice($chars ?: [], $start, $length));
 }
+function tracking_hash(string $token): ?string {
+    // Exactly 32 random bytes in lowercase hex. No order IDs as auth secrets.
+    return preg_match('/^[a-f0-9]{64}$/D', $token) ? hash('sha256', $token) : null;
+}
+function tracking_link(string $token): string {
+    // Derived from configured actual web origin; avoid Host header injection.
+    // This deployment is fixed at the university public URL.
+    return 'https://angsila.informatics.buu.ac.th/~68160395/laundrytrack/index.php?page=track&token=' . rawurlencode($token);
+}
+function guest_tracking_order(): ?array {
+    $guest = $_SESSION['guest_track'] ?? null;
+    if (!is_array($guest) || !is_int($guest['order_id'] ?? null) || !is_string($guest['token_hash'] ?? null)) return null;
+    $stmt = db()->prepare("SELECT o.id,o.order_no,o.status,o.due_at,o.customer_id
+        FROM laundry__orders_tbl o
+        INNER JOIN laundry__users_tbl u ON u.id=o.customer_id
+        WHERE o.id=? AND o.tracking_token_hash=? AND u.email IS NULL
+        LIMIT 1");
+    $stmt->execute([$guest['order_id'], $guest['token_hash']]);
+    $order = $stmt->fetch();
+    return $order ?: null;
+}
 function money(float|string|null $amount): string {
     return number_format((float)($amount ?? 0), 2);
 }

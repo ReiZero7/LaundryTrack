@@ -50,12 +50,30 @@ try {
         );
         exit;
     }
+    if (in_array($page, ['track', 'track-portal', 'track-feed'], true)) {
+        header('Cache-Control: private, no-store, max-age=0');
+        header('Referrer-Policy: no-referrer');
+        header('X-Robots-Tag: noindex, nofollow');
+    }
+    if ($page === 'track-feed') {
+        header('Content-Type: application/json; charset=utf-8');
+        if (current_user()) { http_response_code(403); echo '{"error":"guest_only"}'; exit; }
+        $trackedOrder = guest_tracking_order();
+        if (!$trackedOrder) { http_response_code(401); echo '{"error":"invalid_guest_session"}'; exit; }
+        echo json_encode([
+            'id' => (int)$trackedOrder['id'],
+            'status' => $trackedOrder['status'],
+            'status_label' => status_label($trackedOrder['status']),
+            'ready' => $trackedOrder['status'] === 'ready'
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
     if (current_user() && in_array($page, ['home', 'login', 'register'], true)) go('dashboard');
-    $publicPages = ['home', 'login', 'register'];
+    $publicPages = ['home', 'login', 'register', 'track', 'track-portal'];
     if (!in_array($page, $publicPages, true)) require_login();
     $adminOnly = ['services', 'customers', 'new-order'];
     if (in_array($page, $adminOnly, true)) require_admin();
-    $allowed = ['home','login','register','dashboard','services','customers','new-order','orders','order'];
+    $allowed = ['home','login','register','dashboard','services','customers','new-order','orders','order','track','track-portal'];
     if (!in_array($page, $allowed, true)) { http_response_code(404); $page = 'not-found'; }
     require PROJECT_ROOT . '/app/views/layout_top.php';
     require PROJECT_ROOT . '/app/views/' . $page . '.php';

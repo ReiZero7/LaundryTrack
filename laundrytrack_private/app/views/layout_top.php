@@ -24,6 +24,7 @@ $flashMessage = take_flash();
     <meta name="description" content="LaundryTrack ระบบจัดการร้านซักรีดและติดตามสถานะ">
     <title><?= e(ucfirst(str_replace('-', ' ', (string)$page))) ?> | LaundryTrack</title>
     <link rel="stylesheet" href="assets/style.css">
+    <script src="assets/vendor/qrcode.min.js" defer></script>
     <script src="assets/app.js" defer></script>
 </head>
 <body>
