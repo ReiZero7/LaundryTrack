@@ -8,7 +8,7 @@ $ready = $pending !== null;
 <?php else: ?>
 <div class="auth-layout">
     <section class="auth-intro"><p class="eyebrow">JOIN LAUNDRYTRACK</p><h1>สมัครสมาชิก<br><span>เก็บประวัติการซักรีด</span></h1>
-        <p>ออร์เดอร์นี้จะถูกเชื่อมกับบัญชีสมาชิกใหม่ รวมถึงกรณีที่คุณรับผ้าคืนแล้ว</p>
+        <p>เมื่อยืนยันอีเมลสำเร็จ ออร์เดอร์นี้จะถูกเชื่อมกับบัญชีสมาชิกใหม่ โดย QR ติดตามเดิมยังใช้งานได้จนกว่าจะยืนยันสำเร็จ</p>
     </section>
     <section class="form-panel auth-panel">
         <h2>สร้างบัญชีสมาชิก</h2>
@@ -17,7 +17,7 @@ $ready = $pending !== null;
             <input type="hidden" name="action" value="self-order-join">
             <label>อีเมล<input type="email" name="email" required maxlength="150" autocomplete="email"></label>
             <label>รหัสผ่าน (อย่างน้อย 8 ตัวอักษร)<input type="password" name="password" required minlength="8" maxlength="4096" autocomplete="new-password"></label>
-            <button class="btn btn-primary btn-block" type="submit">สมัครสมาชิกและเก็บออร์เดอร์</button>
+            <button class="btn btn-primary btn-block" type="submit">สมัครสมาชิกและรับอีเมลยืนยัน</button>
         </form>
         <p class="auth-footer"><a href="<?= e(url($pending['source'] === 'guest' ? 'track-portal' : 'order-complete')) ?>">ยังไม่สมัคร กลับไปติดตามออร์เดอร์</a></p>
     </section>
