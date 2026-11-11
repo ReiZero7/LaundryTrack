@@ -54,3 +54,12 @@ body{background:radial-gradient(circle at 92% 14%,#d5f3fa 0,transparent 30%),rad
 .pickup-admin-note{margin:10px 0;padding:14px 16px;background:#f0f7f5;border-radius:12px;color:#2d6257;font-size:13px}
 @media(max-width:780px){.topbar .topbar-actions{gap:6px}.notification-bell{font-size:11px;padding:7px 9px}.pickup-notice,.pickup-confirm{padding:17px}}
 @media(max-width:450px){.topbar .topbar-actions .topbar-tag{display:none}.pickup-notice-item .btn{width:100%;white-space:normal;text-align:center}}
+
+
+/* Live ready-order alerts (updates every 30 seconds while this tab is open) */
+[hidden]{display:none!important}
+.notification-bell:focus-visible{outline:3px solid #138c7d;outline-offset:3px}
+.pickup-toast{position:fixed;right:22px;bottom:22px;z-index:1000;max-width:min(420px,calc(100vw - 28px));display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px;background:#153f47;color:#fff;padding:17px 20px;border:1px solid #5fcfb5;border-radius:15px;box-shadow:0 14px 36px #0e42404a;font-size:13px;font-weight:700}
+.pickup-toast a{display:inline-flex;align-items:center;border-radius:9px;background:#d3f8e8;color:#115e59;padding:7px 12px;font-weight:800}
+.pickup-toast a:hover{background:#b2eeda}
+@media(max-width:450px){.pickup-toast{right:14px;left:14px;bottom:14px}}
