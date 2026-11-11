@@ -384,7 +384,10 @@ function process_action(): never {
                 $_SESSION['csrf'] = bin2hex(random_bytes(32));
                 go('track-portal');
             case 'guest-track-logout':
-                unset($_SESSION['guest_track'], $_SESSION['guest_pickup_claim']);
+                // Leaving guest tracking revokes all outstanding session-bound
+                // membership claims, including any original self-checkout claim.
+                // Otherwise new_self_order could outlive the pickup proof.
+                unset($_SESSION['guest_track'], $_SESSION['guest_pickup_claim'], $_SESSION['new_self_order']);
                 $_SESSION['csrf'] = bin2hex(random_bytes(32));
                 session_regenerate_id(true);
                 flash('ออกจากโหมดติดตามแล้ว');
