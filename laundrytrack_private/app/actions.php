@@ -390,9 +390,9 @@ function process_action(): never {
                     $stmt->execute([$pending['order_id'], $pending['customer_id'], $pending['token_hash']]);
                     $guest = $stmt->fetch();
                     if (!$guest) throw new DomainException('Order no longer claimable');
+                    $joinedHash = password_hash($password, PASSWORD_DEFAULT);
                     $stmt = $pdo->prepare("INSERT INTO laundry__users_tbl(full_name,email,phone,password_hash,role) VALUES(?,?,?,?,'customer')");
-                    $stmt->execute([$guest['full_name'], $email, $guest['phone'],
-                        password_hash($password, PASSWORD_DEFAULT)]);
+                    $stmt->execute([$guest['full_name'], $email, $guest['phone'], $joinedHash]);
                     $accountId = (int)$pdo->lastInsertId();
                     // The old guest QR is revoked. Authenticated member portal now owns the order.
                     $stmt = $pdo->prepare('UPDATE laundry__orders_tbl SET customer_id=?, tracking_token_hash=NULL WHERE id=? AND customer_id=? AND tracking_token_hash=?');
@@ -402,6 +402,9 @@ function process_action(): never {
                     unset($_SESSION['new_self_order'], $_SESSION['guest_track'], $_SESSION['guest_pickup_claim']);
                     session_regenerate_id(true);
                     $_SESSION['csrf'] = bin2hex(random_bytes(32));
+                    $_SESSION['auth_fingerprint'] = hash('sha256', $joinedHash);
+                    $_SESSION['session_started_at'] = time();
+                    $_SESSION['session_last_seen'] = time();
                     $_SESSION['user'] = ['id' => $accountId, 'full_name' => $guest['full_name'], 'email' => $email, 'role' => 'customer'];
                     flash('สมัครสมาชิกสำเร็จ ออร์เดอร์ของคุณเชื่อมกับบัญชีใหม่แล้ว');
                     go('order', ['id' => (int)$guest['id']]);
