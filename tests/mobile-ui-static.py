@@ -10,6 +10,10 @@ def source(path: str) -> str:
 
 
 layout = source("laundrytrack_private/app/views/layout_top.php")
+layout_end = source("laundrytrack_private/app/views/layout_bottom.php")
+login = source("laundrytrack_private/app/views/login.php")
+register = source("laundrytrack_private/app/views/register.php")
+shop_qr_view = source("laundrytrack_private/app/views/shop-qr.php")
 orders = source("laundrytrack_private/app/views/orders.php")
 home = source("laundrytrack_private/app/views/home.php")
 self_order = source("laundrytrack_private/app/views/self-order.php")
@@ -28,6 +32,35 @@ style = source("public_html/laundrytrack/assets/style.css")
 script = source("public_html/laundrytrack/assets/app.js")
 
 checks = {
+    "demo footer and Order Management subtitle are removed":
+        "Final Project Demo" not in layout_end
+        and "PHP + MySQL" not in layout_end
+        and "Order Management" not in layout
+        and "<footer" not in layout_end,
+    "admin and member menus show concise pictograms plus labels":
+        all(text in layout for text in (
+            "['manage-orders', 'งานค้าง', '📋']",
+            "['progress', 'ติดตามงาน', '📍']",
+            "['shop-qr', 'QR ร้าน', '▦']",
+            'class="nav-glyph"')),
+    "landing page offers easy-to-scan three-step icons":
+        "🧺" in home and "📍" in home and "✅" in home
+        and 'class="usage-steps"' in home
+        and "3 ขั้นตอนง่าย ๆ" in home,
+    "order forms retain necessary handoff warning with shorter text":
+        "นำผ้ามาส่ง" in self_order and "ตรวจรับผ้า" in new_order
+        and "name=\"service_id[]\"" in self_order
+        and "name=\"service_id[]\"" in new_order,
+    "individual service progress and security text are not lost":
+        "data-member-service-item" in progress
+        and "data-guest-service-item" in guest_portal
+        and "delete_confirmed" in account
+        and "ห้ามแชร์" not in shop_qr_view
+        and "QR ติดตาม" in shop_qr_view,
+    "icon-first CSS includes keyboard focus and responsive navigation":
+        ".nav-glyph{" in style
+        and ".nav-item:focus-visible" in style
+        and "prefers-reduced-motion" in style,
     "mobile navigation toggle with accessible expanded state":
         'data-mobile-menu' in layout and 'aria-expanded="false"' in layout
         and 'aria-controls="site-navigation"' in layout,

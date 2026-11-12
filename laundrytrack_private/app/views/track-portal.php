@@ -10,11 +10,11 @@ $guestServices = $guestOrder ? order_service_items((int)$guestOrder['id']) : [];
 </div>
 <?php else: ?>
 <div class="page-heading"><div>
-    <p class="eyebrow">LAUNDRY TRACKING PORTAL</p>
-    <h1>ติดตามสถานะแบบอัตโนมัติ</h1>
-    <p>หน้าเว็บจะตรวจสอบสถานะออร์เดอร์นี้ทุก 30 วินาที ขณะเปิดแท็บอยู่</p>
+    <p class="eyebrow">📍 ติดตามผ้า</p>
+    <h1>สถานะออร์เดอร์</h1>
+    <p>🔄 อัปเดตทุก 30 วินาทีขณะเปิดหน้า</p>
 </div></div>
-<p class="form-help" role="note">เมื่อสถานะแสดงว่า “พร้อมรับผ้า” ให้แจ้งความประสงค์รับผ้าผ่านหน้านี้ จากนั้นพนักงานต้องตรวจสอบและยืนยันการส่งมอบที่ร้านก่อนสถานะจะเปลี่ยนเป็น “รับผ้าคืนแล้ว”</p>
+<p class="form-help" role="note">🔔 พร้อมรับ → แจ้งรับที่ร้าน → ✅ พนักงานยืนยันส่งมอบ</p>
 <div class="guest-tracking-grid">
     <section class="panel guest-tracking-card"
         id="guest-track-panel" data-feed="<?= e(url('track-feed')) ?>"
@@ -24,12 +24,12 @@ $guestServices = $guestOrder ? order_service_items((int)$guestOrder['id']) : [];
             <span id="guest-order-status" class="status <?= e(status_class($guestOrder['status'])) ?>"><?= e(order_status_label($guestOrder['status'], $guestOrder['creator_role'])) ?></span>
         </div>
         <div class="info-grid">
-            <div><small>กำหนดรับผ้าโดยประมาณ</small><strong><?= e(date('d/m/Y H:i', strtotime($guestOrder['due_at']))) ?></strong></div>
-            <div><small>การอัปเดต</small><strong>อัตโนมัติทุก 30 วินาที</strong></div>
+            <div><small>⏰ รับประมาณ</small><strong><?= e(date('d/m/Y H:i', strtotime($guestOrder['due_at']))) ?></strong></div>
+            <div><small>🔄 อัปเดต</small><strong>ทุก 30 วินาที</strong></div>
         </div>
         <section class="guest-service-progress" aria-label="สถานะงานของแต่ละบริการ">
-            <h3>บริการที่สั่งและความคืบหน้า</h3>
-            <p class="muted">ทุกบริการต้องเสร็จครบก่อนที่ออร์เดอร์จะพร้อมรับ รวมถึงงานรีดผ้าด้วย</p>
+            <h3>🫧 บริการที่สั่ง</h3>
+            <p class="muted">✅ ต้องทำครบทุกบริการก่อนพร้อมรับ</p>
             <ul class="service-progress-list">
                 <?php foreach ($guestServices as $service): ?>
                 <li data-guest-service-item="<?= (int)$service['id'] ?>">
@@ -39,32 +39,32 @@ $guestServices = $guestOrder ? order_service_items((int)$guestOrder['id']) : [];
                 <?php endforeach; ?>
             </ul>
         </section>
-        <p id="guest-ready-message" class="guest-ready-message" role="status" <?= $guestOrder['status'] === 'ready' ? '' : 'hidden' ?>>🔔 ผ้าพร้อมรับแล้ว กรุณามารับผ้าที่ร้าน</p>
-        <p id="guest-pickup-pending" class="pickup-admin-note" role="status" <?= $guestOrder['status'] === 'ready' && $guestOrder['pickup_requested_at'] ? '' : 'hidden' ?>>✓ แจ้งความประสงค์รับผ้าแล้ว กรุณารอพนักงานตรวจสอบและยืนยันส่งมอบจริง</p>
+        <p id="guest-ready-message" class="guest-ready-message" role="status" <?= $guestOrder['status'] === 'ready' ? '' : 'hidden' ?>>🔔 ผ้าพร้อมรับแล้ว</p>
+        <p id="guest-pickup-pending" class="pickup-admin-note" role="status" <?= $guestOrder['status'] === 'ready' && $guestOrder['pickup_requested_at'] ? '' : 'hidden' ?>>✅ แจ้งรับแล้ว · รอพนักงานส่งมอบ</p>
         <form id="guest-pickup-form" method="post" action="index.php" class="form-stack" <?= $guestOrder['status'] === 'ready' && !$guestOrder['pickup_requested_at'] ? '' : 'hidden' ?>>
             <?= csrf_field() ?>
             <input type="hidden" name="action" value="guest-confirm-pickup">
-            <p>เมื่อถึงร้าน ให้แจ้งพนักงานว่าต้องการรับผ้า พนักงานจะตรวจสอบและยืนยันส่งมอบจริง</p>
-            <button class="btn btn-primary" type="submit">แจ้งพนักงานว่าต้องการรับผ้า</button>
+            <p>📍 ถึงร้านแล้ว? กดแจ้งพนักงาน</p>
+            <button class="btn btn-primary" type="submit">🔔 แจ้งรับผ้า</button>
         </form>
-        <p class="muted">ลิงก์จาก QR เป็นสิทธิ์เข้าถึงเฉพาะออร์เดอร์นี้ อย่าแชร์ลิงก์หรือ QR ให้ผู้อื่น</p>
+        <p class="muted">🔒 QR นี้ใช้ดูออร์เดอร์ของคุณ · อย่าแชร์</p>
         <?php if ($guestOrder['status'] === 'picked_up' && ($eligibleClaim = membership_claim()) !== null
                   && $eligibleClaim['source'] === 'guest'
                   && $eligibleClaim['order_id'] === (int)$guestOrder['id']): ?>
         <div class="self-after-order">
-            <h3>รับผ้าเรียบร้อยแล้ว ต้องการสมัครสมาชิกไหม?</h3>
-            <p>เก็บออร์เดอร์นี้ไว้เป็นประวัติในบัญชีสมาชิกใหม่ แม้รับผ้าคืนแล้วก็สมัครได้</p>
-            <a class="btn btn-primary" href="<?= e(url('join-after-order')) ?>">สมัครสมาชิกและเก็บประวัติออร์เดอร์</a>
+            <h3>✅ รับผ้าแล้ว · สมัครสมาชิก?</h3>
+            <p>เก็บประวัติงานซักไว้ในบัญชีใหม่</p>
+            <a class="btn btn-primary" href="<?= e(url('join-after-order')) ?>">👤 สมัครสมาชิก</a>
         </div>
         <?php endif; ?>
     </section>
     <section class="panel">
-        <h2>ออกจากโหมดติดตาม</h2>
-        <p class="muted">สามารถสแกน QR Code เพื่อเข้ามาติดตามอีกครั้ง หากร้านยังไม่ได้เปลี่ยน QR</p>
+        <h2>↩ ออกจากการติดตาม</h2>
+        <p class="muted">กลับเข้ามาได้ด้วย QR เดิม (หากยังใช้ได้)</p>
         <form method="post" action="index.php">
             <?= csrf_field() ?>
             <input type="hidden" name="action" value="guest-track-logout">
-            <button class="btn btn-light" type="submit">ออกจากโหมดติดตาม</button>
+            <button class="btn btn-light" type="submit">ออกจากหน้านี้</button>
         </form>
     </section>
 </div>

@@ -252,7 +252,7 @@ for suffix, received, state in [
           "'LT-CI-QUEUE-%s',%d,%d,'%s','2026-12-01 10:00:00',20,'%s')"
           % (suffix, queue_customer_id, admin_id, received, state))
 code, url, page = admin.get("manage-orders")
-ok(code == 200 and 'จัดการออร์เดอร์ที่ยังไม่เสร็จ' in page,
+ok(code == 200 and '<h1>งานค้าง</h1>' in page,
    "Admin work queue page is accessible")
 ok('LT-CI-QUEUE-OLD-1' in page and 'LT-CI-QUEUE-OLD-2' in page,
    "unfinished orders are visible in Admin queue")
@@ -342,7 +342,7 @@ ok(status(guest_order) == "ready", "guest request does not mark order picked_up"
 ok(query("SELECT requested_source FROM laundry__pickup_requests_tbl WHERE order_id=%d" % guest_order) == "guest",
    "guest pickup request stored with source")
 code, url, page = requester.get("track-portal")
-ok("guest-pickup-pending" in page and "แจ้งความประสงค์รับผ้าแล้ว" in page,
+ok("guest-pickup-pending" in page and "แจ้งรับแล้ว" in page,
    "guest sees staff verification pending")
 code, url, page = requester.get("join-after-order")
 ok("self-order-join" not in page, "QR guest cannot claim account before staff approval")
@@ -525,7 +525,7 @@ ok(code == 200 and "page=progress" in url,
 
 # Both Admin and Member can open their own account settings.
 code, url, page = admin.get("account")
-ok(code == 200 and "เปลี่ยนรหัสผ่าน" in page and "ลบบัญชีของฉัน" in page,
+ok(code == 200 and "เปลี่ยนรหัสผ่าน" in page and "🗑️ ลบบัญชี" in page,
    "Admin can access account settings")
 code, url, page = member_a.get("account")
 ok(code == 200 and "เปลี่ยนรหัสผ่าน" in page,

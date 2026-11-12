@@ -13,8 +13,8 @@ $stmt = db()->prepare($sql);
 $stmt->execute($params);
 $orders = $stmt->fetchAll();
 ?>
-<div class="page-heading"><div><p class="eyebrow">ORDER HISTORY</p><h1><?= $admin ? 'รายการซักรีดทั้งหมด' : 'รายการซักรีดของฉัน' ?></h1><p>ตรวจสอบประวัติและสถานะการซักรีด</p></div><?php if ($admin): ?><a class="btn btn-primary" href="<?= e(url('new-order')) ?>">+ สร้างออร์เดอร์</a><?php endif; ?></div>
-<section class="panel"><form method="get" action="index.php" class="filter-bar"><input type="hidden" name="page" value="orders"><label class="filter-search">ค้นหาหมายเลขออร์เดอร์<?= $admin ? ' / ชื่อลูกค้า' : '' ?><input type="search" name="q" value="<?= e($search) ?>" placeholder="LT-... / ชื่อ"></label><label>สถานะ<select name="status"><option value="">ทั้งหมด</option><?php foreach ($validStatuses as $s): ?><option value="<?= e($s) ?>" <?= $statusFilter === $s ? 'selected' : '' ?>><?= e(status_label($s)) ?></option><?php endforeach; ?></select></label><button class="btn btn-light" type="submit">ค้นหา</button></form><div class="table-wrap mobile-order-table-wrap"><table class="orders-mobile-table"><thead><tr><th>หมายเลข</th><?php if ($admin): ?><th>ลูกค้า</th><?php endif; ?><th>สร้างรายการ</th><th>กำหนดรับ</th><th>ยอดรวม</th><th>สถานะ</th><th></th></tr></thead><tbody>
+<div class="page-heading"><div><p class="eyebrow">🧾 ประวัติ</p><h1><?= $admin ? 'ออร์เดอร์ทั้งหมด' : 'ออร์เดอร์ของฉัน' ?></h1><p>ดูสถานะและประวัติ</p></div><?php if ($admin): ?><a class="btn btn-primary" href="<?= e(url('new-order')) ?>">➕ สร้างออร์เดอร์</a><?php endif; ?></div>
+<section class="panel"><form method="get" action="index.php" class="filter-bar"><input type="hidden" name="page" value="orders"><label class="filter-search">🔍 ค้นหา<?= $admin ? 'ออร์เดอร์ / ชื่อ' : '' ?><input type="search" name="q" value="<?= e($search) ?>" placeholder="LT-... / ชื่อ"></label><label>สถานะ<select name="status"><option value="">ทั้งหมด</option><?php foreach ($validStatuses as $s): ?><option value="<?= e($s) ?>" <?= $statusFilter === $s ? 'selected' : '' ?>><?= e(status_label($s)) ?></option><?php endforeach; ?></select></label><button class="btn btn-light" type="submit">🔍 ค้นหา</button></form><div class="table-wrap mobile-order-table-wrap"><table class="orders-mobile-table"><thead><tr><th>หมายเลข</th><?php if ($admin): ?><th>ลูกค้า</th><?php endif; ?><th>วันที่</th><th>กำหนดรับ</th><th>ยอด</th><th>สถานะ</th><th></th></tr></thead><tbody>
 <?php foreach ($orders as $o): ?>
 <tr>
   <td data-label="หมายเลขออร์เดอร์"><strong><?= e($o['order_no']) ?></strong></td>
@@ -23,7 +23,7 @@ $orders = $stmt->fetchAll();
   <td data-label="กำหนดรับ"><?= e(date('d/m/Y', strtotime($o['due_at']))) ?></td>
   <td data-label="ยอดรวม">฿<?= money($o['total_amount']) ?></td>
   <td data-label="สถานะ"><span class="status <?= status_class($o['status']) ?>"><?= e(order_status_label($o['status'], $o['creator_role'])) ?></span><?php if ($o['status'] === 'ready' && $o['pickup_requested_at']): ?><small class="muted"> · รอพนักงานยืนยันส่งมอบ</small><?php endif; ?></td>
-  <td data-label="รายละเอียด"><a class="text-link" href="<?= e(url('order', ['id' => (int)$o['id']])) ?>">ดูรายละเอียดออร์เดอร์</a></td>
+  <td data-label="รายละเอียด"><a class="text-link" href="<?= e(url('order', ['id' => (int)$o['id']])) ?>">ดู →</a></td>
 </tr>
 <?php endforeach; ?>
 <?php if (!$orders): ?><tr><td colspan="<?= $admin ? 7 : 6 ?>" class="empty-cell">ไม่พบรายการซักรีด</td></tr><?php endif; ?></tbody></table></div><p class="footnote">แสดงสูงสุด 200 รายการล่าสุด</p></section>
