@@ -39,6 +39,21 @@ $sql = 'SELECT o.id,o.order_no,o.received_at,o.due_at,o.status,
 $stmt = db()->prepare($sql);
 $stmt->execute($params);
 $queue = $stmt->fetchAll();
+// Fetch EVERY service line for the listed orders, not merely the first service.
+$servicesByOrder = [];
+if ($queue) {
+    $ids = array_map(static fn(array $o): int => (int)$o['id'], $queue);
+    $marks = implode(',', array_fill(0, count($ids), '?'));
+    $itemsStmt = db()->prepare("SELECT oi.order_id,oi.quantity,s.name,s.unit,
+        w.completed_at AS completed_at
+        FROM laundry__order_items_tbl oi JOIN laundry__services_tbl s ON s.id=oi.service_id
+        LEFT JOIN laundry__order_item_work_tbl w ON w.order_item_id=oi.id
+        WHERE oi.order_id IN ($marks) ORDER BY oi.order_id,oi.id");
+    $itemsStmt->execute($ids);
+    foreach ($itemsStmt->fetchAll() as $line) {
+        $servicesByOrder[(int)$line['order_id']][] = $line;
+    }
+}
 $stats = db()->query("SELECT
     COUNT(*) AS active_total,
     COALESCE(SUM(o.status='requested'),0) AS dropoff_pending,
@@ -94,6 +109,21 @@ $linkQuery = ['q'=>$search, 'status'=>$statusFilter];
             <span>รับรายการ: <?= e(date('d/m/Y H:i', strtotime($order['received_at']))) ?></span>
             <span>กำหนดรับ: <?= e(date('d/m/Y H:i', strtotime($order['due_at']))) ?></span>
             <span>ค่าบริการ: ฿<?= money($order['total_amount']) ?></span>
+          </div>
+          <div class="queue-service-lines" aria-label="บริการทั้งหมดในออร์เดอร์">
+            <strong>รายการบริการที่ต้องทำ</strong>
+            <ul>
+              <?php foreach ($servicesByOrder[(int)$order['id']] ?? [] as $line): ?>
+                <li>
+                  <span><?= e($line['name']) ?> × <?= money($line['quantity']) ?> <?= e($line['unit']) ?></span>
+                  <?php if (in_array($order['status'], ['received','washing','drying'], true)): ?>
+                    <span class="queue-service-state <?= $line['completed_at'] === null ? '' : 'done' ?>">
+                      <?= $line['completed_at'] === null ? 'รอดำเนินการ' : '✓ เสร็จแล้ว' ?>
+                    </span>
+                  <?php endif; ?>
+                </li>
+              <?php endforeach; ?>
+            </ul>
           </div>
           <?php if ($order['status'] === 'ready' && $order['pickup_requested_at']): ?>
             <p class="queue-pickup-alert">● ลูกค้าแจ้งขอรับผ้าแล้ว รอพนักงานตรวจสอบและยืนยันส่งมอบ</p>
