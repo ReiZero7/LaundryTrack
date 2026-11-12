@@ -25,7 +25,7 @@ After creating and validating a fresh private backup, stage the following files 
 **Migration dependencies, run before application deploy:**
 - `laundrytrack_private/migrations/2026-11-12_order_item_progress.sql` (new)
 - `laundrytrack_private/scripts/apply_order_item_progress_migration.php` (new)
-- Guarded CLI invocation on Angsila: `php ~/laundrytrack_private/scripts/apply_order_item_progress_migration.php --backup-verified`. It refuses any database other than `s68160395`. Verify the migration output, schema, and aggregate row counts. No real customer records should be printed.
+- Guarded CLI invocation on Angsila: `php ~/laundrytrack_private/scripts/apply_order_item_progress_migration.php --backup-verified`. On Angsila it refuses any database other than `s68160395`. A distinct `APP_ENV=ci` / `laundrytrack_ci` / explicit `LAUNDRY_PROGRESS_CI_MIGRATION=yes` gate exists strictly to test the same migration script on disposable CI MySQL. Verify the migration output, schema, and aggregate row counts. No real customer records should be printed.
 
 **Existing files updated (back up before replacing):**
 - `laundrytrack_private/app/bootstrap.php`
