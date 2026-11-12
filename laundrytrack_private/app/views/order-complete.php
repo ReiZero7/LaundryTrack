@@ -18,26 +18,26 @@ if ($valid) {
 <div class="empty-state"><h1>ไม่พบรายการสั่งบริการล่าสุด</h1><p>กรุณาสร้างออร์เดอร์ใหม่ หรือติดต่อร้านหากมีการบันทึกไปแล้ว</p><a class="btn btn-primary" href="<?= e(url('order-start')) ?>">เริ่มสั่งบริการ</a></div>
 <?php else: ?>
 <?php $link = tracking_link($token); ?>
-<div class="page-heading"><div><p class="eyebrow">ORDER SUCCESS</p>
-<h1>สร้างออร์เดอร์สำเร็จ ✓</h1>
-<p>รายการนี้เป็นคำขอซักรีด กรุณานำผ้ามาส่งให้ร้านยืนยันรับผ้าจริง</p>
+<div class="page-heading"><div><p class="eyebrow">✅ สั่งสำเร็จ</p>
+<h1>✅ สั่งซักสำเร็จ</h1>
+<p>🧺 นำผ้ามาส่งที่ร้านเพื่อเริ่มงาน</p>
 </div></div>
 <section class="panel guest-tracking-card">
     <div class="panel-header"><h2>หมายเลข <?= e($order['order_no']) ?></h2><span class="status <?= e(status_class($order['status'])) ?>"><?= e(order_status_label($order['status'], 'customer')) ?></span></div>
-    <p class="muted">โปรดบันทึกลิงก์หรือ QR นี้ไว้เพื่อติดตามออร์เดอร์ในภายหลัง ห้ามแชร์ให้บุคคลอื่น</p>
+    <p class="muted">🔒 เก็บ QR นี้ไว้ติดตาม · อย่าแชร์</p>
     <div class="walkin-qr-output" data-qr-link="<?= e($link) ?>">
         <div id="order-qr-code" aria-label="QR Code ติดตามออร์เดอร์"></div>
         <label>ลิงก์ติดตามของคุณ <input type="text" id="order-tracking-url" readonly value="<?= e($link) ?>"></label>
-        <button class="btn btn-light" id="copy-order-tracking-url" type="button">คัดลอกลิงก์ติดตาม</button>
+        <button class="btn btn-light" id="copy-order-tracking-url" type="button">📋 คัดลอก</button>
     </div>
-    <p><a class="btn btn-light" href="<?= e(url('track', ['token' => $token])) ?>">ติดตามออร์เดอร์นี้</a></p>
+    <p><a class="btn btn-light" href="<?= e(url('track', ['token' => $token])) ?>">📍 ติดตามงาน</a></p>
 </section>
 <section class="panel self-after-order">
-    <h2>ต้องการสมัครสมาชิกไหม?</h2>
-    <p>สมัครสมาชิกเพื่อเก็บออร์เดอร์นี้ไว้ในบัญชี ดูประวัติ และรับการแจ้งเตือนเมื่อเข้าสู่ระบบในเว็บไซต์</p>
+    <h2>👤 สมัครสมาชิก?</h2>
+    <p>เก็บประวัติออร์เดอร์ในบัญชีของคุณ</p>
     <div class="self-after-actions">
-        <a class="btn btn-primary" href="<?= e(url('join-after-order')) ?>">สมัครสมาชิกและเชื่อมออร์เดอร์</a>
-        <a class="btn btn-light" href="<?= e(url('track', ['token' => $token])) ?>">ยังไม่สมัคร ติดตามด้วย QR</a>
+        <a class="btn btn-primary" href="<?= e(url('join-after-order')) ?>">สมัครสมาชิก</a>
+        <a class="btn btn-light" href="<?= e(url('track', ['token' => $token])) ?>">ติดตามด้วย QR</a>
     </div>
 </section>
 <?php endif; ?>
