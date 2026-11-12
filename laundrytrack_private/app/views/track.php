@@ -21,29 +21,29 @@ if ($tokenHash !== null) {
 </div>
 <?php else: ?>
 <div class="page-heading"><div>
-    <p class="eyebrow">GUEST ORDER TRACKING</p>
-    <h1>ติดตามสถานะการซักรีด</h1>
-    <p>ตรวจสอบออร์เดอร์ของคุณผ่าน QR Code จากร้าน</p>
+    <p class="eyebrow">📍 ติดตามผ่าน QR</p>
+    <h1>ติดตามสถานะ</h1>
+    <p>สแกน QR เพื่อดูงานซัก</p>
 </div></div>
 <section class="panel guest-tracking-card">
     <div class="panel-header"><h2>ออร์เดอร์ <?= e($publicTrackOrder['order_no']) ?></h2>
         <span class="status <?= e(status_class($publicTrackOrder['status'])) ?>"><?= e(order_status_label($publicTrackOrder['status'], $publicTrackOrder['creator_role'])) ?></span>
     </div>
     <div class="info-grid">
-        <div><small>วันที่คาดว่าจะรับผ้า</small><strong><?= e(date('d/m/Y H:i', strtotime($publicTrackOrder['due_at']))) ?></strong></div>
-        <div><small>สถานะล่าสุด</small><strong><?= e(order_status_label($publicTrackOrder['status'], $publicTrackOrder['creator_role'])) ?></strong></div>
+        <div><small>⏰ วันรับผ้า</small><strong><?= e(date('d/m/Y H:i', strtotime($publicTrackOrder['due_at']))) ?></strong></div>
+        <div><small>📍 สถานะ</small><strong><?= e(order_status_label($publicTrackOrder['status'], $publicTrackOrder['creator_role'])) ?></strong></div>
     </div>
-    <p class="muted">หน้า QR นี้แสดงเฉพาะสถานะและกำหนดรับผ้า ไม่แสดงชื่อ เบอร์โทร หรือรายละเอียดส่วนตัว</p>
+    <p class="muted">🔒 แสดงเฉพาะสถานะและวันรับผ้า · ไม่มีข้อมูลส่วนตัว</p>
     <?php if (!current_user()): ?>
         <form method="post" action="index.php" class="form-stack">
             <?= csrf_field() ?>
             <input type="hidden" name="action" value="guest-track-login">
             <input type="hidden" name="token" value="<?= e($rawToken) ?>">
-            <button class="btn btn-primary" type="submit">🔔 เข้าสู่โหมดติดตามและรับการแจ้งเตือน</button>
+            <button class="btn btn-primary" type="submit">🔔 เริ่มติดตาม</button>
         </form>
-        <p class="muted">เข้าโหมดติดตามได้โดยไม่ต้องมีอีเมลหรือรหัสผ่าน การแจ้งเตือนจะอัปเดตขณะเปิดเว็บไซต์เท่านั้น</p>
+        <p class="muted">🔄 อัปเดตขณะเปิดหน้า · ไม่ต้องเข้าสู่ระบบ</p>
     <?php else: ?>
-        <p class="muted">คุณกำลังเข้าสู่ระบบสมาชิกอยู่ หากต้องการติดตามแบบลูกค้าหน้าร้าน กรุณาออกจากบัญชีสมาชิกก่อน</p>
+        <p class="muted">👤 โปรดออกจากบัญชีสมาชิกก่อนติดตามแบบ Guest</p>
     <?php endif; ?>
 </section>
 <?php endif; ?>
