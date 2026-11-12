@@ -8,6 +8,21 @@ $stmt = db()->prepare("SELECT o.id,o.order_no,o.status,o.due_at,o.total_amount,o
     ORDER BY o.id DESC LIMIT 8");
 $stmt->execute([$customerId]);
 $activeOrders = $stmt->fetchAll();
+$servicesByOrder = [];
+if ($activeOrders) {
+    $ids = array_map(static fn(array $o): int => (int)$o['id'], $activeOrders);
+    $marks = implode(',', array_fill(0, count($ids), '?'));
+    $servicesStmt = db()->prepare("SELECT oi.order_id,oi.id,s.name,
+          COALESCE(p.work_status,'pending') AS work_status
+          FROM laundry__order_items_tbl oi
+          JOIN laundry__services_tbl s ON s.id=oi.service_id
+          LEFT JOIN laundry__order_item_progress_tbl p ON p.order_item_id=oi.id
+          WHERE oi.order_id IN ($marks) ORDER BY oi.id");
+    $servicesStmt->execute($ids);
+    foreach ($servicesStmt->fetchAll() as $service) {
+        $servicesByOrder[(int)$service['order_id']][] = $service;
+    }
+}
 $stmt = db()->prepare("SELECT id,order_no,status,due_at,total_amount,received_at
     FROM laundry__orders_tbl
     WHERE customer_id=? AND status IN ('picked_up','cancelled')
@@ -71,6 +86,17 @@ $steps = [
                 <?php else: ?>
                 <p class="member-progress-guidance" data-progress-guidance>ระบบอัปเดตความคืบหน้าทุกประมาณ 30 วินาทีขณะเปิดเว็บไซต์</p>
                 <?php endif; ?>
+                <div class="member-service-progress">
+                  <h3>ความคืบหน้าแต่ละบริการ</h3>
+                  <ul class="service-progress-list">
+                    <?php foreach ($servicesByOrder[(int)$o['id']] ?? [] as $service): ?>
+                    <li data-member-service-item="<?= (int)$service['id'] ?>">
+                      <strong><?= e($service['name']) ?></strong>
+                      <span class="service-work-badge service-work-<?= e($service['work_status']) ?>" data-service-progress-label><?= e(service_work_label($service['work_status'], $service['name'])) ?></span>
+                    </li>
+                    <?php endforeach; ?>
+                  </ul>
+                </div>
                 <div class="member-progress-foot">
                     <span>กำหนดรับประมาณ <?= e(date('d/m/Y H:i', strtotime($o['due_at']))) ?></span>
                     <a class="btn btn-primary" href="<?= e(url('order', ['id' => (int)$o['id']])) ?>">ดูรายละเอียด<?= $o['status'] === 'ready' ? ' / แจ้งขอรับผ้า' : '' ?></a>

@@ -105,8 +105,8 @@ function process_action(): never {
                 require_login();
                 $me = current_user();
                 $currentPassword = is_string($_POST['current_password'] ?? null) ? $_POST['current_password'] : '';
-                if (post_string('delete_confirmation') !== 'DELETE' || strlen($currentPassword) > 4096) {
-                    flash('กรุณาพิมพ์ DELETE และกรอกรหัสผ่านปัจจุบันเพื่อยืนยัน', 'error');
+                if (post_string('delete_confirmed') !== 'yes' || strlen($currentPassword) > 4096) {
+                    flash('กรุณากรอกรหัสผ่านปัจจุบันและติ๊กยืนยันการลบบัญชี', 'error');
                     go('account');
                 }
                 $pdo = db();
@@ -140,6 +140,8 @@ function process_action(): never {
                             [(int)$me['id']]],
                         ['SELECT order_id FROM laundry__pickup_requests_tbl WHERE requested_by=? OR confirmed_by=? LIMIT 1',
                             [(int)$me['id'], (int)$me['id']]],
+                        ['SELECT order_item_id FROM laundry__order_item_progress_tbl WHERE updated_by=? LIMIT 1',
+                            [(int)$me['id']]],
                     ];
                     $referenced = false;
                     foreach ($queries as [$sql, $args]) {
@@ -337,7 +339,11 @@ function process_action(): never {
                         $token === null ? null : tracking_hash($token)]);
                     $orderId = (int)$pdo->lastInsertId();
                     $insert = $pdo->prepare('INSERT INTO laundry__order_items_tbl(order_id,service_id,quantity,unit_price,subtotal) VALUES(?,?,?,?,?)');
-                    foreach ($items as $item) $insert->execute(array_merge([$orderId], $item));
+                    $progressInsert = $pdo->prepare("INSERT INTO laundry__order_item_progress_tbl (order_item_id,work_status) VALUES (?,'pending')");
+                    foreach ($items as $item) {
+                        $insert->execute(array_merge([$orderId], $item));
+                        $progressInsert->execute([(int)$pdo->lastInsertId()]);
+                    }
                     $pdo->prepare("INSERT INTO laundry__status_history_tbl(order_id,changed_by,old_status,new_status,note) VALUES(?,?,NULL,'requested',?)")
                         ->execute([$orderId, $customerId, 'ลูกค้าสร้างคำขอสั่งบริการ กรุณานำผ้ามาส่งที่ร้าน']);
                     $pdo->commit();
@@ -434,7 +440,9 @@ function process_action(): never {
                 $notes = post_string('notes');
                 $serviceIds = $_POST['service_id'] ?? [];
                 $qtys = $_POST['quantity'] ?? [];
-                if ((!$walkin && $customerId < 1) || !is_array($serviceIds) || !is_array($qtys) || count($serviceIds) < 1 || count($serviceIds) > 15 || text_length($notes) > 2000) {
+                if ((!$walkin && $customerId < 1) || !is_array($serviceIds) || !is_array($qtys)
+                    || count($serviceIds) < 1 || count($serviceIds) > 15
+                    || count($serviceIds) !== count($qtys) || text_length($notes) > 2000) {
                     flash('กรุณาเลือกลูกค้าและบริการ', 'error'); go('new-order');
                 }
                 $dueDate = DateTimeImmutable::createFromFormat('!Y-m-d\TH:i', $due);
@@ -478,7 +486,11 @@ function process_action(): never {
                     $stmt->execute([$orderNo, $customerId, current_user()['id'], $dueDate->format('Y-m-d H:i:s'), number_format($total, 2, '.', ''), $notes ?: null, $rawTrackingToken === null ? null : tracking_hash($rawTrackingToken)]);
                     $orderId = (int) $pdo->lastInsertId();
                     $insert = $pdo->prepare('INSERT INTO laundry__order_items_tbl(order_id,service_id,quantity,unit_price,subtotal) VALUES(?,?,?,?,?)');
-                    foreach ($items as $item) $insert->execute(array_merge([$orderId], $item));
+                    $progressInsert = $pdo->prepare("INSERT INTO laundry__order_item_progress_tbl (order_item_id,work_status) VALUES (?,'pending')");
+                    foreach ($items as $item) {
+                        $insert->execute(array_merge([$orderId], $item));
+                        $progressInsert->execute([(int)$pdo->lastInsertId()]);
+                    }
                     $pdo->prepare('INSERT INTO laundry__status_history_tbl(order_id,changed_by,old_status,new_status,note) VALUES(?,?,NULL,\'received\',?)')->execute([$orderId, current_user()['id'], 'บันทึกรับผ้า']);
                     $pdo->commit();
                     if ($rawTrackingToken !== null) {
@@ -647,6 +659,46 @@ function process_action(): never {
                     if ($e instanceof DomainException) { flash('ไม่สามารถปิดออร์เดอร์ได้ ต้องมีคำขอรับผ้าและยังไม่ถูกส่งมอบ', 'error'); go('order', ['id' => $orderId]); }
                     throw $e;
                 }
+            case 'order-item-progress':
+                require_admin();
+                $orderId = post_int('id');
+                $itemId = post_int('item_id');
+                $workStatus = post_string('work_status');
+                if ($orderId < 1 || $itemId < 1 || !in_array($workStatus, ['pending','working','done'], true)) {
+                    http_response_code(400);
+                    exit('Invalid service progress');
+                }
+                $pdo = db();
+                $pdo->beginTransaction();
+                try {
+                    // Lock the same parent row as order-status, preventing a race
+                    // between changing service work and marking the order ready.
+                    $stmt = $pdo->prepare('SELECT status FROM laundry__orders_tbl WHERE id=? FOR UPDATE');
+                    $stmt->execute([$orderId]);
+                    $state = $stmt->fetchColumn();
+                    if (!in_array($state, ['received','washing','drying'], true)) {
+                        throw new DomainException('Cannot change service work before dropoff or after ready');
+                    }
+                    $stmt = $pdo->prepare('SELECT id FROM laundry__order_items_tbl WHERE id=? AND order_id=?');
+                    $stmt->execute([$itemId, $orderId]);
+                    if ($stmt->fetchColumn() === false) throw new DomainException('Item does not belong to order');
+                    $stmt = $pdo->prepare("INSERT INTO laundry__order_item_progress_tbl
+                        (order_item_id,work_status,updated_at,updated_by)
+                        VALUES (?,?,CURRENT_TIMESTAMP,?)
+                        ON DUPLICATE KEY UPDATE work_status=VALUES(work_status),
+                          updated_at=VALUES(updated_at),updated_by=VALUES(updated_by)");
+                    $stmt->execute([$itemId, $workStatus, (int)current_user()['id']]);
+                    $pdo->commit();
+                    flash('บันทึกความคืบหน้าบริการเรียบร้อย');
+                    go('order', ['id'=>$orderId]);
+                } catch (Throwable $e) {
+                    if ($pdo->inTransaction()) $pdo->rollBack();
+                    if ($e instanceof DomainException) {
+                        flash('ไม่สามารถแก้ไขบริการนี้ได้ในสถานะปัจจุบัน', 'error');
+                        go('order', ['id'=>$orderId]);
+                    }
+                    throw $e;
+                }
             case 'order-status':
                 require_admin();
                 $orderId = post_int('id');
@@ -671,6 +723,19 @@ function process_action(): never {
                     $current = $orderState['status'] ?? null;
                     if (!$current || !in_array($next, $transitions[(string)$current] ?? [], true)) throw new DomainException('Invalid status transition');
                     // Physical drop-off must be verified on requested -> received; no skipping.
+                    if ($current === 'drying' && $next === 'ready') {
+                        $check = $pdo->prepare("SELECT COUNT(*) AS total,
+                            COALESCE(SUM(CASE WHEN p.work_status='done' THEN 1 ELSE 0 END),0) AS completed
+                            FROM laundry__order_items_tbl oi
+                            LEFT JOIN laundry__order_item_progress_tbl p ON p.order_item_id=oi.id
+                            WHERE oi.order_id=?");
+                        $check->execute([$orderId]);
+                        $work = $check->fetch();
+                        if (!$work || (int)$work['total'] === 0
+                            || (int)$work['completed'] !== (int)$work['total']) {
+                            throw new DomainException('Unfinished services');
+                        }
+                    }
                     if ($current === 'requested' && $next === 'received' && post_string('dropoff_confirmed') !== 'yes') {
                         throw new DomainException('Staff must verify physical laundry receipt');
                     }
@@ -680,7 +745,12 @@ function process_action(): never {
                     flash('อัปเดตสถานะเรียบร้อย'); go('order', ['id' => $orderId]);
                 } catch (Throwable $e) {
                     if ($pdo->inTransaction()) $pdo->rollBack();
-                    if ($e instanceof DomainException) { flash('ไม่สามารถเปลี่ยนสถานะตามขั้นตอนที่เลือกได้', 'error'); go('orders'); }
+                    if ($e instanceof DomainException) {
+                        flash($e->getMessage() === 'Unfinished services'
+                            ? 'ยังมีบริการที่ทำไม่เสร็จ กรุณาดำเนินการทุกบริการให้ครบก่อนปรับสถานะเป็นพร้อมรับผ้า'
+                            : 'ไม่สามารถเปลี่ยนสถานะตามขั้นตอนที่เลือกได้', 'error');
+                        go('order', ['id'=>$orderId]);
+                    }
                     throw $e;
                 }
             default:

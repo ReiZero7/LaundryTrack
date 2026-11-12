@@ -1,5 +1,6 @@
 <?php
 $guestOrder = current_user() ? null : guest_tracking_order();
+$guestServices = $guestOrder ? order_service_items((int)$guestOrder['id']) : [];
 ?>
 <?php if (!$guestOrder): ?>
 <div class="empty-state">
@@ -26,6 +27,18 @@ $guestOrder = current_user() ? null : guest_tracking_order();
             <div><small>กำหนดรับผ้าโดยประมาณ</small><strong><?= e(date('d/m/Y H:i', strtotime($guestOrder['due_at']))) ?></strong></div>
             <div><small>การอัปเดต</small><strong>อัตโนมัติทุก 30 วินาที</strong></div>
         </div>
+        <section class="guest-service-progress" aria-label="สถานะงานของแต่ละบริการ">
+            <h3>บริการที่สั่งและความคืบหน้า</h3>
+            <p class="muted">ทุกบริการต้องเสร็จครบก่อนที่ออร์เดอร์จะพร้อมรับ รวมถึงงานรีดผ้าด้วย</p>
+            <ul class="service-progress-list">
+                <?php foreach ($guestServices as $service): ?>
+                <li data-guest-service-item="<?= (int)$service['id'] ?>">
+                    <strong><?= e($service['name']) ?></strong>
+                    <span class="service-work-badge service-work-<?= e($service['work_status']) ?>" data-service-progress-label><?= e(service_work_label($service['work_status'], $service['name'])) ?></span>
+                </li>
+                <?php endforeach; ?>
+            </ul>
+        </section>
         <p id="guest-ready-message" class="guest-ready-message" role="status" <?= $guestOrder['status'] === 'ready' ? '' : 'hidden' ?>>🔔 ผ้าพร้อมรับแล้ว กรุณามารับผ้าที่ร้าน</p>
         <p id="guest-pickup-pending" class="pickup-admin-note" role="status" <?= $guestOrder['status'] === 'ready' && $guestOrder['pickup_requested_at'] ? '' : 'hidden' ?>>✓ แจ้งความประสงค์รับผ้าแล้ว กรุณารอพนักงานตรวจสอบและยืนยันส่งมอบจริง</p>
         <form id="guest-pickup-form" method="post" action="index.php" class="form-stack" <?= $guestOrder['status'] === 'ready' && !$guestOrder['pickup_requested_at'] ? '' : 'hidden' ?>>

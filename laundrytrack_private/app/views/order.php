@@ -4,9 +4,10 @@ $stmt = db()->prepare('SELECT o.*,pr.requested_at AS pickup_requested_at,pr.conf
 $stmt->execute(is_admin() ? [$id] : [$id, current_user()['id']]);
 $order = $stmt->fetch();
 if (!$order) { http_response_code(404); echo '<div class="empty-state"><h2>ไม่พบออร์เดอร์หรือไม่มีสิทธิ์เข้าถึง</h2><a href="' . e(url('orders')) . '" class="btn btn-primary">กลับไปรายการ</a></div>'; return; }
-$stmt = db()->prepare('SELECT oi.*,s.name,s.unit FROM laundry__order_items_tbl oi JOIN laundry__services_tbl s ON s.id=oi.service_id WHERE oi.order_id=? ORDER BY oi.id');
-$stmt->execute([$id]);
-$items = $stmt->fetchAll();
+$items = order_service_items($id);
+$completedServiceCount = count(array_filter($items, static fn(array $item): bool => $item['work_status'] === 'done'));
+$allServicesComplete = count($items) > 0 && $completedServiceCount === count($items);
+$canManageServiceWork = is_admin() && in_array($order['status'], ['received','washing','drying'], true);
 $stmt = db()->prepare('SELECT h.*,u.full_name AS actor FROM laundry__status_history_tbl h JOIN laundry__users_tbl u ON u.id=h.changed_by WHERE h.order_id=? ORDER BY h.id');
 $stmt->execute([$id]);
 $history = $stmt->fetchAll();
@@ -19,6 +20,9 @@ if (!is_admin() || !is_array($trackingNotice) || (int)($trackingNotice['order_id
 $selfServiceWaitingDropoff = $order['status'] === 'requested';
 $transitions = ['requested' => ['received','cancelled'], 'received' => ['washing','cancelled'], 'washing' => ['drying'], 'drying' => ['ready']];
 $nextStates = $transitions[$order['status']] ?? [];
+// Completion cannot be offered until every selected service (e.g. ironing)
+// is marked done. Server-side validation independently enforces this rule.
+if ($order['status'] === 'drying' && !$allServicesComplete) $nextStates = [];
 ?>
 <div class="page-heading"><div><p class="eyebrow">ORDER DETAIL</p><h1>ออร์เดอร์ <?= e($order['order_no']) ?></h1><p>สร้างเมื่อ <?= e(date('d/m/Y H:i', strtotime($order['received_at']))) ?></p></div><div class="order-heading-actions"><?php if (is_admin() && $order['customer_email'] === null): ?><a class="btn btn-light" href="#order-qr-tools">QR ของออร์เดอร์นี้</a><?php endif; ?><a class="btn btn-light" href="<?= e(url(is_admin() ? 'manage-orders' : 'orders')) ?>">← <?= is_admin() ? 'กลับหน้าจัดการออร์เดอร์' : 'กลับรายการ' ?></a></div></div>
 <?php if ($selfServiceWaitingDropoff): ?>
@@ -27,7 +31,34 @@ $nextStates = $transitions[$order['status']] ?? [];
     <p>ลูกค้าส่งคำสั่งบริการผ่านเว็บไซต์แล้ว แต่ร้านต้องตรวจสอบและรับผ้าจริงก่อนเปลี่ยนเป็นรับผ้าแล้ว</p>
 </section>
 <?php endif; ?>
-<div class="detail-grid"><section class="panel"><div class="panel-header"><h2>ข้อมูลออร์เดอร์</h2><span class="status <?= status_class($order['status']) ?>"><?= e(order_status_label($order['status'], $order['creator_role'])) ?></span></div><div class="info-grid"><div><small>ลูกค้า</small><strong><?= e($order['customer_name']) ?></strong></div><div><small>อีเมล</small><strong><?= e($order['customer_email'] ?: '— (Guest)') ?></strong></div><div><small>เบอร์โทร</small><strong><?= e($order['customer_phone'] ?: '—') ?></strong></div><div><small>กำหนดรับผ้า</small><strong><?= e(date('d/m/Y H:i', strtotime($order['due_at']))) ?></strong></div></div><h3 class="subheading">รายการบริการ</h3><div class="table-wrap" role="region" aria-label="ตารางรายการบริการของออร์เดอร์" tabindex="0"><table><thead><tr><th>บริการ</th><th>จำนวน</th><th>ราคา/หน่วย</th><th>รวม</th></tr></thead><tbody><?php foreach ($items as $i): ?><tr><td><?= e($i['name']) ?></td><td><?= money($i['quantity']) ?> <?= e($i['unit']) ?></td><td>฿<?= money($i['unit_price']) ?></td><td>฿<?= money($i['subtotal']) ?></td></tr><?php endforeach; ?></tbody></table></div><p class="mobile-table-hint">ตารางรายการบริการสามารถเลื่อนซ้าย–ขวาเพื่อดูข้อมูลทั้งหมดได้</p><div class="order-totals"><span>ค่าบริการรวม</span><strong>฿<?= money($order['total_amount']) ?></strong></div><?php if ($order['notes']): ?><p class="note-box"><strong>หมายเหตุ:</strong> <?= nl2br(e($order['notes'])) ?></p><?php endif; ?></section>
+<div class="detail-grid"><section class="panel"><div class="panel-header"><h2>ข้อมูลออร์เดอร์</h2><span class="status <?= status_class($order['status']) ?>"><?= e(order_status_label($order['status'], $order['creator_role'])) ?></span></div><div class="info-grid"><div><small>ลูกค้า</small><strong><?= e($order['customer_name']) ?></strong></div><div><small>อีเมล</small><strong><?= e($order['customer_email'] ?: '— (Guest)') ?></strong></div><div><small>เบอร์โทร</small><strong><?= e($order['customer_phone'] ?: '—') ?></strong></div><div><small>กำหนดรับผ้า</small><strong><?= e(date('d/m/Y H:i', strtotime($order['due_at']))) ?></strong></div></div><h3 class="subheading">รายการบริการ</h3><div class="table-wrap" role="region" aria-label="ตารางรายการบริการของออร์เดอร์" tabindex="0"><table><thead><tr><th>บริการ</th><th>จำนวน</th><th>ราคา/หน่วย</th><th>รวม</th><th>สถานะบริการ</th></tr></thead><tbody><?php foreach ($items as $i): ?><tr><td><?= e($i['name']) ?></td><td><?= money($i['quantity']) ?> <?= e($i['unit']) ?></td><td>฿<?= money($i['unit_price']) ?></td><td>฿<?= money($i['subtotal']) ?></td><td><span class="service-work-badge service-work-<?= e($i['work_status']) ?>"><?= e(service_work_label($i['work_status'], $i['name'])) ?></span></td></tr><?php endforeach; ?></tbody></table></div><p class="mobile-table-hint">ตารางรายการบริการสามารถเลื่อนซ้าย–ขวาเพื่อดูข้อมูลทั้งหมดได้</p>
+<div class="service-work-summary" role="status">ดำเนินการบริการเสร็จ <strong><?= $completedServiceCount ?>/<?= count($items) ?></strong> รายการ
+<?php if (!$allServicesComplete && $order['status'] === 'drying'): ?>
+<span class="service-work-warning">ต้องทำทุกรายการให้ครบก่อนเปลี่ยนเป็นพร้อมรับผ้า</span>
+<?php endif; ?>
+</div>
+<?php if ($canManageServiceWork): ?>
+<section class="service-work-manager" aria-labelledby="service-work-title">
+  <h3 id="service-work-title">ความคืบหน้าแต่ละบริการ</h3>
+  <p class="muted">แต่ละบริการมีสถานะของตัวเอง เช่น ซักอบเสร็จแล้ว แต่รีดผ้ายังรอดำเนินการ</p>
+  <?php foreach ($items as $item): ?>
+  <form method="post" action="index.php" class="service-work-row">
+    <?= csrf_field() ?>
+    <input type="hidden" name="action" value="order-item-progress">
+    <input type="hidden" name="id" value="<?= (int)$order['id'] ?>">
+    <input type="hidden" name="item_id" value="<?= (int)$item['id'] ?>">
+    <label><strong><?= e($item['name']) ?></strong>
+      <select name="work_status" aria-label="สถานะบริการ <?= e($item['name']) ?>">
+        <option value="pending" <?= $item['work_status'] === 'pending' ? 'selected' : '' ?>>รอดำเนินการ</option>
+        <option value="working" <?= $item['work_status'] === 'working' ? 'selected' : '' ?>>กำลังดำเนินการ</option>
+        <option value="done" <?= $item['work_status'] === 'done' ? 'selected' : '' ?>>เสร็จแล้ว</option>
+      </select>
+    </label>
+    <button class="btn btn-light" type="submit">บันทึกสถานะ</button>
+  </form>
+  <?php endforeach; ?>
+</section>
+<?php endif; ?><div class="order-totals"><span>ค่าบริการรวม</span><strong>฿<?= money($order['total_amount']) ?></strong></div><?php if ($order['notes']): ?><p class="note-box"><strong>หมายเหตุ:</strong> <?= nl2br(e($order['notes'])) ?></p><?php endif; ?></section>
 <section class="panel"><div class="panel-header"><h2>ติดตามสถานะ</h2></div><ol class="timeline"><?php foreach ($history as $h): ?><li><div class="timeline-dot"></div><strong><?= e(order_status_label($h['new_status'], $order['creator_role'])) ?></strong><small><?= e(date('d/m/Y H:i', strtotime($h['changed_at']))) ?> • <?= e($h['actor']) ?></small><?php if ($h['note']): ?><p><?= e($h['note']) ?></p><?php endif; ?></li><?php endforeach; ?></ol>
 <?php if (!is_admin() && $order['status'] === 'ready'): ?>
 <div class="pickup-confirm">

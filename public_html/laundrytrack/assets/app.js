@@ -314,6 +314,17 @@
       if (message) message.hidden = data.status !== 'ready';
       if (confirmForm) confirmForm.hidden = data.status !== 'ready' || data.pickup_requested === true;
       if (pendingMessage) pendingMessage.hidden = data.status !== 'ready' || data.pickup_requested !== true;
+      if (Array.isArray(data.services)) {
+        for (const item of data.services) {
+          if (!Number.isSafeInteger(item.id) || !['pending','working','done'].includes(item.status)) continue;
+          const row = panel.querySelector('[data-guest-service-item="' + item.id + '"]');
+          const label = row?.querySelector('[data-service-progress-label]');
+          if (label) {
+            label.textContent = typeof item.label === 'string' ? item.label : item.status;
+            label.className = 'service-work-badge service-work-' + item.status;
+          }
+        }
+      }
       if (previousStatus !== 'ready' && data.status === 'ready') showReadyToast();
       previousStatus = data.status;
     } catch (_) {
@@ -390,6 +401,17 @@
           const dot = node.querySelector('.member-step-dot');
           if (dot) dot.textContent = step < item.stage ? '✓' : String(step);
         });
+        if (Array.isArray(item.services)) {
+          for (const task of item.services) {
+            if (!Number.isSafeInteger(task.id) || !['pending','working','done'].includes(task.status)) continue;
+            const row = card.querySelector('[data-member-service-item="' + task.id + '"]');
+            const label = row?.querySelector('[data-service-progress-label]');
+            if (label) {
+              label.textContent = typeof task.label === 'string' ? task.label : task.status;
+              label.className = 'service-work-badge service-work-' + task.status;
+            }
+          }
+        }
         const note = card.querySelector('[data-progress-guidance]');
         if (note) note.textContent = item.status === 'ready' && item.pickup_requested === true
           ? '✓ แจ้งขอรับผ้าแล้ว กรุณารอพนักงานยืนยันการส่งมอบที่ร้าน'

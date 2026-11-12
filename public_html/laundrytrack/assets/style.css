@@ -455,3 +455,43 @@ body{background:radial-gradient(circle at 92% 14%,#d5f3fa 0,transparent 30%),rad
 .topbar-account-link:hover{text-decoration:underline;color:#087fae}
 .topbar-account-link:focus-visible{outline:2px solid #087fae;outline-offset:3px}
 @media(max-width:600px){.topbar-account-link{max-width:35vw}}
+
+
+/* Per-service work tracking: multiple tasks must finish before an order is ready. */
+.service-work-badge{display:inline-flex;align-items:center;gap:6px;max-width:100%;
+  padding:5px 10px;border-radius:100px;font-size:12px;line-height:1.5;font-weight:750;
+  white-space:normal;overflow-wrap:anywhere;border:1px solid transparent}
+.service-work-pending{color:#896320;background:#fff8e7;border-color:#f1e0b3}
+.service-work-working{color:#166386;background:#e9f6ff;border-color:#c0e4f6}
+.service-work-done{color:#12704f;background:#e8f9ef;border-color:#c0e8d1}
+.service-work-summary{display:flex;align-items:center;flex-wrap:wrap;gap:9px;
+  padding:12px 14px;margin:12px 0 15px;border:1px solid #d4e9f2;
+  border-radius:12px;background:#f0f9fc;color:#275c73;font-size:13px}
+.service-work-summary strong{color:#087da7;font-size:17px;white-space:nowrap}
+.service-work-warning{font-weight:750;color:#9b5626}
+.service-work-manager{margin:18px 0;padding:17px 16px;border:1px solid #cde6ef;border-radius:15px;background:#f8fcff}
+.service-work-manager h3,.guest-service-progress h3,.member-service-progress h3{
+  font-size:16px;margin:0 0 6px;color:#1c536b}
+.service-work-manager>p{font-size:12px;line-height:1.7;margin:0 0 13px}
+.service-work-row{display:flex;align-items:end;gap:12px;padding:12px 0;
+  border-top:1px solid #d9eaf0}
+.service-work-row label{display:grid;gap:6px;flex:1;min-width:0;font-size:12px;color:#315a72}
+.service-work-row label strong{color:#224e65;font-size:14px}
+.service-work-row select{width:100%;min-height:44px;padding:8px 12px;
+  border:1px solid #c0dce9;background:#fff;border-radius:10px}
+.service-work-row .btn{min-height:44px;flex:0 0 auto}
+.guest-service-progress,.member-service-progress{padding:16px 0 6px}
+.guest-service-progress>p{font-size:12px;margin:5px 0 12px}
+.service-progress-list{list-style:none;margin:9px 0 0;padding:0;display:grid;gap:8px}
+.service-progress-list li{display:flex;justify-content:space-between;align-items:center;gap:12px;
+  padding:12px 14px;background:#f5fbfe;border:1px solid #dceef5;border-radius:12px;min-width:0}
+.service-progress-list li strong{font-size:13px;color:#255671;overflow-wrap:anywhere;min-width:0}
+.account-delete-confirm{background:#fff8f8!important;border-color:#efccca!important;color:#7a3740!important}
+.account-delete-confirm input[type=checkbox]{accent-color:#a83b42!important}
+@media(max-width:650px){
+  .service-work-row{align-items:stretch;flex-direction:column}
+  .service-work-row .btn{width:100%}
+  .service-progress-list li{align-items:flex-start;flex-wrap:wrap}
+  .service-progress-list li .service-work-badge{margin-left:auto}
+  .service-work-summary{align-items:flex-start}
+}

@@ -419,6 +419,30 @@ function order_rate_limit_allowed(): bool {
     }
 }
 
+/** One service line is one required work task; the order is ready only when all are done. */
+function order_service_items(int $orderId): array {
+    $stmt = db()->prepare("SELECT oi.id,oi.quantity,oi.unit_price,oi.subtotal,
+            s.name,s.unit,COALESCE(p.work_status,'pending') AS work_status,
+            p.updated_at,p.updated_by
+        FROM laundry__order_items_tbl oi
+        JOIN laundry__services_tbl s ON s.id=oi.service_id
+        LEFT JOIN laundry__order_item_progress_tbl p ON p.order_item_id=oi.id
+        WHERE oi.order_id=? ORDER BY oi.id");
+    $stmt->execute([$orderId]);
+    return $stmt->fetchAll();
+}
+function service_work_label(string $status, string $name): string {
+    // Name-based detail is purely presentational, not a workflow rule.
+    $isIroning = function_exists('mb_stripos')
+        ? mb_stripos($name, 'รีด', 0, 'UTF-8') !== false
+        : strpos($name, 'รีด') !== false;
+    return match ($status) {
+        'working' => $isIroning ? 'กำลังรีดผ้า' : 'กำลังดำเนินการ',
+        'done' => $isIroning ? 'รีดผ้าเสร็จแล้ว' : 'เสร็จแล้ว',
+        default => $isIroning ? 'รอรีดผ้า' : 'รอดำเนินการ',
+    };
+}
+
 function money(float|string|null $amount): string {
     return number_format((float)($amount ?? 0), 2);
 }

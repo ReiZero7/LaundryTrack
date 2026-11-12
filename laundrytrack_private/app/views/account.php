@@ -51,8 +51,9 @@ $canDelete = !($me['role'] === 'customer' && $openOrderCount > 0);
     <label>ยืนยันรหัสผ่านปัจจุบัน
       <input type="password" name="current_password" autocomplete="current-password" required maxlength="4096" <?= $canDelete ? '' : 'disabled' ?>>
     </label>
-    <label>พิมพ์ <strong>DELETE</strong> เพื่อยืนยัน
-      <input type="text" name="delete_confirmation" required pattern="DELETE" maxlength="6" autocomplete="off" placeholder="DELETE" <?= $canDelete ? '' : 'disabled' ?>>
+    <label class="dropoff-confirm-check account-delete-confirm">
+      <input type="checkbox" name="delete_confirmed" value="yes" required <?= $canDelete ? '' : 'disabled' ?>>
+      <span>ฉันเข้าใจว่าการลบบัญชีจะทำให้เข้าสู่ระบบด้วยบัญชีนี้ไม่ได้อีก และต้องการลบบัญชีของตัวเอง</span>
     </label>
     <button class="btn btn-danger" type="submit" <?= $canDelete ? '' : 'disabled' ?>>ยืนยันลบบัญชีอย่างถาวร</button>
   </form>
