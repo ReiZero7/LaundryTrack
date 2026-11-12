@@ -88,7 +88,13 @@ try {
             'status' => $trackedOrder['status'],
             'status_label' => order_status_label($trackedOrder['status'], $trackedOrder['creator_role']),
             'ready' => $trackedOrder['status'] === 'ready',
-            'pickup_requested' => $trackedOrder['pickup_requested_at'] !== null
+            'pickup_requested' => $trackedOrder['pickup_requested_at'] !== null,
+            'services' => array_map(static fn(array $item): array => [
+                'id' => (int)$item['id'],
+                'name' => (string)$item['name'],
+                'status' => (string)$item['work_status'],
+                'label' => service_work_label((string)$item['work_status'], (string)$item['name']),
+            ], order_service_items((int)$trackedOrder['id']))
         ], JSON_UNESCAPED_UNICODE);
         exit;
     }
