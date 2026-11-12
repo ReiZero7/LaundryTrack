@@ -7,7 +7,8 @@
   const toggle = document.querySelector('[data-mobile-menu]');
   const closeButton = document.querySelector('[data-mobile-close]');
   const backdrop = document.querySelector('[data-mobile-backdrop]');
-  if (!drawer || !toggle || !closeButton || !backdrop) return;
+  const content = document.querySelector('.content-area');
+  if (!drawer || !toggle || !closeButton || !backdrop || !content) return;
 
   const mobile = window.matchMedia('(max-width: 780px)');
   let opened = false;
@@ -19,6 +20,8 @@
     toggle.setAttribute('aria-expanded', String(showDrawer));
     toggle.setAttribute('aria-label', showDrawer ? 'ปิดเมนูนำทาง' : 'เปิดเมนูนำทาง');
     backdrop.hidden = !showDrawer;
+    // Keep keyboard and assistive-technology focus inside the open drawer.
+    content.inert = showDrawer;
     if (mobile.matches && !showDrawer) {
       drawer.setAttribute('inert', '');
       drawer.setAttribute('aria-hidden', 'true');
@@ -103,6 +106,7 @@
     next.querySelector('.quantity-input').value = '1';
     wrap.appendChild(next);
     update();
+    next.querySelector('.service-select').focus();
   });
   wrap.addEventListener('input', update);
   wrap.addEventListener('change', update);
