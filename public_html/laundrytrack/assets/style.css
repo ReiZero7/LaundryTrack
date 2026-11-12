@@ -166,6 +166,7 @@ body{background:radial-gradient(circle at 92% 14%,#d5f3fa 0,transparent 30%),rad
 .mobile-nav-close:focus-visible,.mobile-menu-toggle:focus-visible{outline:3px solid #24afcc;outline-offset:3px}
 
 /* Step-by-step instructions, shared between home, checkout and handoff pages. */
+.how-it-works .section-heading{margin-bottom:16px}
 .usage-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:0 0 24px}
 .usage-step{background:#fff;border:1px solid #d9eaf1;border-radius:17px;padding:17px 18px;box-shadow:0 8px 24px #1b56830a;min-width:0}
 .usage-step-number{display:inline-grid;place-items:center;width:32px;height:32px;border-radius:10px;
@@ -253,7 +254,9 @@ body{background:radial-gradient(circle at 92% 14%,#d5f3fa 0,transparent 30%),rad
 @media (max-width:600px){
   .mobile-order-table-wrap{overflow:visible;border:0;border-radius:0}
   .orders-mobile-table{display:block;width:100%;min-width:0;border-collapse:separate}
-  .orders-mobile-table thead{display:none}
+  /* Visually hide headings, but retain them for screen readers. */
+  .orders-mobile-table thead{position:absolute;width:1px;height:1px;padding:0;margin:-1px;
+    overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);white-space:nowrap}
   .orders-mobile-table tbody{display:grid;gap:12px}
   .orders-mobile-table tbody tr{
     display:grid;min-width:0;border:1px solid #d6e8f0;border-radius:16px;
@@ -282,6 +285,7 @@ body{background:radial-gradient(circle at 92% 14%,#d5f3fa 0,transparent 30%),rad
   }
   .orders-mobile-table tbody td.empty-cell::before{display:none}
   .mobile-table-hint{display:block}
+  .form-help + .guest-tracking-grid{margin-top:16px}
   .member-progress-step{min-width:0}
   .member-progress-step .member-step-dot{min-width:0}
   .member-step-grid{gap:8px}
