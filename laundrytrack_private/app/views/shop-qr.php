@@ -16,7 +16,7 @@ $shopOrderUrl = shop_order_link();
     <p>ใช้ QR ประจำร้านนี้ร่วมกันได้ ไม่ใช่ QR ลับของออร์เดอร์ลูกค้า</p>
   </div></div>
   <div class="shop-qr-layout">
-    <div class="shop-qr-preview" data-qr-link="<?= e($shopOrderUrl) ?>">
+    <div class="shop-qr-preview walkin-qr-output" data-qr-link="<?= e($shopOrderUrl) ?>">
       <div id="order-qr-code" aria-label="QR Code สำหรับเปิดหน้า Member และ Guest"></div>
     </div>
     <div class="shop-qr-instructions">
