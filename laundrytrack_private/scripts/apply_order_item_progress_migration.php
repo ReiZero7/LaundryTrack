@@ -11,11 +11,17 @@ require_once __DIR__ . '/../app/bootstrap.php';
 try {
     $pdo = db();
     $name = (string)$pdo->query('SELECT DATABASE()')->fetchColumn();
-    if ($name !== 's68160395' || setting('DB_NAME') !== 's68160395') {
+    $ciOnly = setting('APP_ENV') === 'ci'
+        && $name === 'laundrytrack_ci'
+        && setting('DB_NAME') === 'laundrytrack_ci'
+        && getenv('LAUNDRY_PROGRESS_CI_MIGRATION') === 'yes';
+    $production = $name === 's68160395' && setting('DB_NAME') === 's68160395'
+        && setting('APP_ENV') !== 'ci';
+    if (!$production && !$ciOnly) {
         throw new RuntimeException('REFUSED: unexpected database');
     }
     $confirmation = $argv[1] ?? '';
-    if ($confirmation !== '--backup-verified') {
+    if ($production && $confirmation !== '--backup-verified') {
         throw new RuntimeException('REFUSED: first verify a recent backup, then pass --backup-verified');
     }
     $migration = __DIR__ . '/../migrations/2026-11-12_order_item_progress.sql';
