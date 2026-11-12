@@ -511,4 +511,46 @@ ok(query("SELECT u.email IS NULL FROM laundry__orders_tbl o JOIN laundry__users_
 code, url, page = new_login.get("progress")
 ok("page=login" in url, "other member browser invalid after account deletion")
 
+# Admin can also change passwords and self-delete when another active Admin exists.
+query("INSERT INTO laundry__users_tbl(full_name,email,password_hash,role) "
+      "VALUES('Second CI Admin','backup-admin@example.test',"
+      " '$2y$10$not-a-valid-password-hash','admin')")
+# Use a disposable password hash produced by PHP, not a fake or plaintext hash.
+hash_value = subprocess.run(
+    ["php", "-r", 'echo password_hash("backup-admin-passphrase", PASSWORD_DEFAULT);'],
+    text=True, capture_output=True, check=True
+).stdout.strip()
+query("UPDATE laundry__users_tbl SET password_hash='%s' "
+      "WHERE email='backup-admin@example.test'" % hash_value)
+backup_admin = Browser()
+code, url, page = backup_admin.post({
+    "action":"login", "email":"backup-admin@example.test",
+    "password":"backup-admin-passphrase"
+}, "login")
+ok("page=dashboard" in url, "second Admin logs in with hashed password")
+code, url, page = backup_admin.post({
+    "action":"account-password-change", "current_password":"backup-admin-passphrase",
+    "new_password":"backup-admin-new-passphrase",
+    "confirm_password":"backup-admin-new-passphrase"
+}, "account")
+ok("page=account" in url and "เปลี่ยนรหัสผ่านเรียบร้อย" in page,
+   "Admin can change their own password")
+code, url, page = admin.post({
+    "action":"account-delete", "current_password":"ci-admin-passphrase",
+    "delete_confirmation":"DELETE"
+}, "account")
+ok("account_removed=1" in url, "original Admin can delete when replacement active")
+ok(query("SELECT email IS NULL FROM laundry__users_tbl WHERE id=%d" % admin_id) == "1",
+   "Admin with historical activity becomes an anonymized tombstone")
+ok(query("SELECT COUNT(*) FROM laundry__status_history_tbl WHERE changed_by=%d" % admin_id) != "0",
+   "historical staff audit rows remain after Admin deletion")
+code, url, page = backup_admin.get("manage-orders")
+ok(code == 200, "replacement Admin continues to manage unfinished orders")
+code, url, page = backup_admin.post({
+    "action":"account-delete", "current_password":"backup-admin-new-passphrase",
+    "delete_confirmation":"DELETE"
+}, "account")
+ok("page=account" in url and "แอดมินคนสุดท้าย" in page,
+   "replacement Admin cannot delete the final active Admin")
+
 print("ALL FINAL SYSTEM HTTP SMOKE TESTS PASSED: %d checks" % total)
