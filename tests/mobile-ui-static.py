@@ -47,6 +47,22 @@ checks = {
         "🧺" in home and "📍" in home and "✅" in home
         and 'class="usage-steps"' in home
         and "3 ขั้นตอนง่าย ๆ" in home,
+    "Ocean Laundry landing keeps correct action routes and non-live preview":
+        'class="ocean-landing"' in home
+        and 'class="hero ocean-hero"' in home
+        and "url('order-start')" in home
+        and "url('login')" in home
+        and 'ตัวอย่างขั้นตอนการซัก' in home
+        and 'สถานะจริงของคุณ' in home
+        and 'นำผ้ามาส่งที่ร้าน' in home,
+    "Ocean Laundry navigation and CSS work without external design dependencies":
+        'class="ocean-public-nav"' in layout
+        and 'class="ocean-topbar-login"' in layout
+        and 'assets/style.css?v=ocean18' in layout
+        and '.ocean-washer{' in style
+        and '.ocean-services-grid{' in style
+        and '.ocean-status-flow{' in style
+        and '@media(max-width:620px)' in style,
     "order forms retain necessary handoff warning with shorter text":
         "นำผ้ามาส่ง" in self_order and "ตรวจรับผ้า" in new_order
         and "name=\"service_id[]\"" in self_order
