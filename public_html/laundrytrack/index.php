@@ -70,6 +70,27 @@ try {
                 'pickup_requested' => (bool)$order['pickup_requested'],
             ];
         }
+        if ($out) {
+            $ids = array_column($out, 'id');
+            $marks = implode(',', array_fill(0, count($ids), '?'));
+            $progressStmt = db()->prepare("SELECT oi.order_id,oi.id,s.name,
+                       COALESCE(p.work_status,'pending') AS work_status
+                FROM laundry__order_items_tbl oi
+                JOIN laundry__services_tbl s ON s.id=oi.service_id
+                LEFT JOIN laundry__order_item_progress_tbl p ON p.order_item_id=oi.id
+                WHERE oi.order_id IN ($marks) ORDER BY oi.id");
+            $progressStmt->execute($ids);
+            $groups = [];
+            foreach ($progressStmt->fetchAll() as $item) {
+                $groups[(int)$item['order_id']][] = [
+                    'id'=>(int)$item['id'],
+                    'status'=>(string)$item['work_status'],
+                    'label'=>service_work_label((string)$item['work_status'], (string)$item['name'])
+                ];
+            }
+            foreach ($out as &$entry) $entry['services'] = $groups[$entry['id']] ?? [];
+            unset($entry);
+        }
         echo json_encode(['orders' => $out], JSON_UNESCAPED_UNICODE);
         exit;
     }
