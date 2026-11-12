@@ -495,3 +495,50 @@ body{background:radial-gradient(circle at 92% 14%,#d5f3fa 0,transparent 30%),rad
   .service-progress-list li .service-work-badge{margin-left:auto}
   .service-work-summary{align-items:flex-start}
 }
+
+
+/* PR #17 — icon-first, less reading. Keep all labels and permission checks. */
+.nav-item{gap:10px;font-weight:750}
+.nav-glyph{
+  display:inline-flex;align-items:center;justify-content:center;
+  flex:0 0 32px;min-width:32px;height:32px;border-radius:10px;
+  font-size:17px;line-height:1;background:#ffffff14
+}
+.nav-item.active .nav-glyph{background:#b8e8fa;filter:none}
+.nav-item:hover .nav-glyph{background:#ffffff24}
+.nav-item.active:hover .nav-glyph{background:#b8e8fa}
+.brand-logo{font-size:24px}
+.topbar-kicker{letter-spacing:1px;font-size:10px}
+.page-heading{margin-bottom:19px}
+.page-heading h1{letter-spacing:-.4px}
+.page-heading .eyebrow{letter-spacing:1px!important}
+.page-heading p:not(.eyebrow){max-width:52ch}
+.hero-content>p:not(.eyebrow){font-weight:600;letter-spacing:.2px}
+.usage-step{min-width:0}
+.usage-step-number{display:grid;place-items:center;font-size:25px;line-height:1.2}
+.usage-step strong,.feature h3{color:#194f70}
+.metric-card{min-height:146px}
+.metric-card p{font-size:13px;font-weight:800;color:#33576e;line-height:1.55}
+.metric-card span{font-size:11px;margin-top:8px;line-height:1.5}
+.queue-stat span{font-weight:750}
+.queue-service-count{font-weight:800}
+.member-progress-hero-actions .btn,.hero-actions .btn{gap:8px}
+.member-progress-guidance,.form-help,.queue-order-note{line-height:1.6}
+.service-progress-list li{gap:12px}
+.service-work-badge{font-weight:800}
+.service-work-manager h3,.member-service-progress h3,.guest-service-progress h3{color:#195b7c}
+.order-start-choice .self-start-icon{font-size:32px}
+.order-start-choice p{max-width:30ch;margin-left:auto;margin-right:auto}
+.btn:focus-visible,.nav-item:focus-visible{outline:3px solid #1b93bc;outline-offset:3px}
+@media(max-width:780px){
+  .nav-glyph{flex-basis:29px;min-width:29px;height:29px;font-size:16px}
+  .page-heading{margin-bottom:16px}
+  .page-heading p:not(.eyebrow){line-height:1.5}
+  .metric-card{min-height:151px}
+  .hero-actions .btn{flex:1 1 130px;white-space:normal}
+  .member-progress-hero-actions .btn{white-space:normal}
+  .queue-sort-note{line-height:1.5}
+}
+@media(prefers-reduced-motion:reduce){
+  .nav-glyph{transition:none}
+}
