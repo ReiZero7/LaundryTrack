@@ -27,7 +27,7 @@ $nextStates = $transitions[$order['status']] ?? [];
     <p>ลูกค้าส่งคำสั่งบริการผ่านเว็บไซต์แล้ว แต่ร้านต้องตรวจสอบและรับผ้าจริงก่อนเปลี่ยนเป็นรับผ้าแล้ว</p>
 </section>
 <?php endif; ?>
-<div class="detail-grid"><section class="panel"><div class="panel-header"><h2>ข้อมูลออร์เดอร์</h2><span class="status <?= status_class($order['status']) ?>"><?= e(order_status_label($order['status'], $order['creator_role'])) ?></span></div><div class="info-grid"><div><small>ลูกค้า</small><strong><?= e($order['customer_name']) ?></strong></div><div><small>อีเมล</small><strong><?= e($order['customer_email']) ?></strong></div><div><small>เบอร์โทร</small><strong><?= e($order['customer_phone'] ?: '—') ?></strong></div><div><small>กำหนดรับผ้า</small><strong><?= e(date('d/m/Y H:i', strtotime($order['due_at']))) ?></strong></div></div><h3 class="subheading">รายการบริการ</h3><div class="table-wrap" role="region" aria-label="ตารางรายการบริการของออร์เดอร์" tabindex="0"><table><thead><tr><th>บริการ</th><th>จำนวน</th><th>ราคา/หน่วย</th><th>รวม</th></tr></thead><tbody><?php foreach ($items as $i): ?><tr><td><?= e($i['name']) ?></td><td><?= money($i['quantity']) ?> <?= e($i['unit']) ?></td><td>฿<?= money($i['unit_price']) ?></td><td>฿<?= money($i['subtotal']) ?></td></tr><?php endforeach; ?></tbody></table></div><p class="mobile-table-hint">ตารางรายการบริการสามารถเลื่อนซ้าย–ขวาเพื่อดูข้อมูลทั้งหมดได้</p><div class="order-totals"><span>ค่าบริการรวม</span><strong>฿<?= money($order['total_amount']) ?></strong></div><?php if ($order['notes']): ?><p class="note-box"><strong>หมายเหตุ:</strong> <?= nl2br(e($order['notes'])) ?></p><?php endif; ?></section>
+<div class="detail-grid"><section class="panel"><div class="panel-header"><h2>ข้อมูลออร์เดอร์</h2><span class="status <?= status_class($order['status']) ?>"><?= e(order_status_label($order['status'], $order['creator_role'])) ?></span></div><div class="info-grid"><div><small>ลูกค้า</small><strong><?= e($order['customer_name']) ?></strong></div><div><small>อีเมล</small><strong><?= e($order['customer_email'] ?: '— (Guest)') ?></strong></div><div><small>เบอร์โทร</small><strong><?= e($order['customer_phone'] ?: '—') ?></strong></div><div><small>กำหนดรับผ้า</small><strong><?= e(date('d/m/Y H:i', strtotime($order['due_at']))) ?></strong></div></div><h3 class="subheading">รายการบริการ</h3><div class="table-wrap" role="region" aria-label="ตารางรายการบริการของออร์เดอร์" tabindex="0"><table><thead><tr><th>บริการ</th><th>จำนวน</th><th>ราคา/หน่วย</th><th>รวม</th></tr></thead><tbody><?php foreach ($items as $i): ?><tr><td><?= e($i['name']) ?></td><td><?= money($i['quantity']) ?> <?= e($i['unit']) ?></td><td>฿<?= money($i['unit_price']) ?></td><td>฿<?= money($i['subtotal']) ?></td></tr><?php endforeach; ?></tbody></table></div><p class="mobile-table-hint">ตารางรายการบริการสามารถเลื่อนซ้าย–ขวาเพื่อดูข้อมูลทั้งหมดได้</p><div class="order-totals"><span>ค่าบริการรวม</span><strong>฿<?= money($order['total_amount']) ?></strong></div><?php if ($order['notes']): ?><p class="note-box"><strong>หมายเหตุ:</strong> <?= nl2br(e($order['notes'])) ?></p><?php endif; ?></section>
 <section class="panel"><div class="panel-header"><h2>ติดตามสถานะ</h2></div><ol class="timeline"><?php foreach ($history as $h): ?><li><div class="timeline-dot"></div><strong><?= e(order_status_label($h['new_status'], $order['creator_role'])) ?></strong><small><?= e(date('d/m/Y H:i', strtotime($h['changed_at']))) ?> • <?= e($h['actor']) ?></small><?php if ($h['note']): ?><p><?= e($h['note']) ?></p><?php endif; ?></li><?php endforeach; ?></ol>
 <?php if (!is_admin() && $order['status'] === 'ready'): ?>
 <div class="pickup-confirm">
@@ -70,7 +70,8 @@ $nextStates = $transitions[$order['status']] ?? [];
 
 <!-- Guest QR controls are outside the two-column detail grid so both
      guest and member order details retain identical information/timeline layout. -->
-<div class="order-qr-below"><?php if (is_admin() && $order['customer_email'] === null): ?>
+<?php if (is_admin() && $order['customer_email'] === null): ?>
+<div class="order-qr-below">
 <section id="order-qr-tools" class="panel walkin-qr-panel">
     <div class="panel-header"><h2>QR Code ติดตามออร์เดอร์</h2></div>
     <?php if ($trackingNotice): ?>
@@ -93,4 +94,5 @@ $nextStates = $transitions[$order['status']] ?? [];
         <button class="btn btn-light" type="submit">สร้าง QR / ลิงก์ใหม่</button>
     </form>
 </section>
-<?php endif; ?></div>
+</div>
+<?php endif; ?>
