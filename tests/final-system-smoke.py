@@ -392,6 +392,30 @@ ok(code == 200 and "CI Guest" in page, "linked member can view claimed order his
 # Member-only order and account-isolation checks.
 member_a = sign_up_and_login("member-a@example.test", "member-a-passphrase")
 member_b = sign_up_and_login("member-b@example.test", "member-b-passphrase")
+
+# The Admin (staff-created) order path must also preserve BOTH selected services.
+member_a_db_id = int(query("SELECT id FROM laundry__users_tbl WHERE email='member-a@example.test'"))
+code, url, page = admin.post({
+    "action":"order-create", "customer_mode":"existing",
+    "customer_id":str(member_a_db_id), "due_at":future,
+    "service_id[]":["1","2"], "quantity[]":["1","3"],
+    "notes":"CI staff multi-service order",
+}, "new-order")
+ok(code == 200 and "page=order" in url, "Admin can create a two-service order")
+staff_order_id = int(parse_qs(urlparse(url).query)["id"][0])
+ok(query("SELECT GROUP_CONCAT(service_id ORDER BY id) FROM laundry__order_items_tbl "
+         "WHERE order_id=%d" % staff_order_id) == "1,2",
+   "Admin order saves BOTH wash and ironing service rows")
+ok(query("SELECT total_amount FROM laundry__orders_tbl WHERE id=%d" % staff_order_id) == "185.00",
+   "Admin order total includes both requested services")
+ok(count("SELECT COUNT(*) FROM laundry__order_item_progress_tbl p "
+         "JOIN laundry__order_items_tbl oi ON oi.id=p.order_item_id "
+         "WHERE oi.order_id=%d" % staff_order_id) == 2,
+   "Admin new-order initializes two independent work rows")
+code, url, page = admin.post({
+    "action":"order-status", "id":str(staff_order_id), "status":"cancelled"
+}, "order", id=str(staff_order_id))
+ok(status(staff_order_id) == "cancelled", "Disposable Admin test order cancelled for isolation")
 code, url, page = new_self_order(member_a, guest=False)
 ok(code == 200 and "page=order" in url, "registered member can create self-service order")
 member_id = int(parse_qs(urlparse(url).query)["id"][0])
