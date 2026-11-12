@@ -193,6 +193,35 @@ ok('data-label="หมายเลขออร์เดอร์"' in page
    and 'data-label="รายละเอียด"' in page,
    "order listing includes visible mobile field labels")
 ok('aria-current="page"' in page, "active navigation link is marked for accessibility")
+# This staff queue has a distinct URL, no completed jobs, and the oldest live job first.
+code, url, page = Browser().get("manage-orders")
+ok("page=login" in url, "anonymous users cannot open Admin work queue")
+admin_id = int(query("SELECT id FROM laundry__users_tbl WHERE email='staff@example.test'"))
+query("INSERT INTO laundry__users_tbl(full_name,email,password_hash,role) "
+      "VALUES('CI Queue Customer','queue-customer@example.test','unused','customer')")
+queue_customer_id = int(query("SELECT id FROM laundry__users_tbl WHERE email='queue-customer@example.test'"))
+for suffix, received, state in [
+        ("OLD-1", "2026-10-19 10:00:00", "washing"),
+        ("OLD-2", "2026-10-20 10:00:00", "received"),
+        ("DONE", "2026-10-18 10:00:00", "picked_up")]:
+    query("INSERT INTO laundry__orders_tbl(order_no,customer_id,created_by,"
+          "received_at,due_at,total_amount,status) VALUES("
+          "'LT-CI-QUEUE-%s',%d,%d,'%s','2026-12-01 10:00:00',20,'%s')"
+          % (suffix, queue_customer_id, admin_id, received, state))
+code, url, page = admin.get("manage-orders")
+ok(code == 200 and 'จัดการออร์เดอร์ที่ยังไม่เสร็จ' in page,
+   "Admin work queue page is accessible")
+ok('LT-CI-QUEUE-OLD-1' in page and 'LT-CI-QUEUE-OLD-2' in page,
+   "unfinished orders are visible in Admin queue")
+ok(page.find('LT-CI-QUEUE-OLD-1') < page.find('LT-CI-QUEUE-OLD-2'),
+   "oldest unfinished order appears first")
+ok('LT-CI-QUEUE-DONE' not in page,
+   "completed pickup order is absent from Admin work queue")
+code, url, page = admin.get("orders")
+ok('LT-CI-QUEUE-DONE' in page, "all-order history still includes finished orders")
+query("DELETE FROM laundry__orders_tbl WHERE order_no LIKE 'LT-CI-QUEUE-%'")
+query("DELETE FROM laundry__users_tbl WHERE id=%d" % queue_customer_id)
+
 
 code, url, page = admin.post({
     "action": "order-status", "id": str(guest_order), "status": "washing",
@@ -377,5 +406,109 @@ code, url, page = independent.post({
 }, "login")
 ok(code == 200 and "page=progress" in url,
    "unrelated valid account still logs in after account-specific lockout")
+
+# Both Admin and Member can open their own account settings.
+code, url, page = admin.get("account")
+ok(code == 200 and "เปลี่ยนรหัสผ่าน" in page and "ลบบัญชีของฉัน" in page,
+   "Admin can access account settings")
+code, url, page = member_a.get("account")
+ok(code == 200 and "เปลี่ยนรหัสผ่าน" in page,
+   "Member can access account settings")
+code, url, page = Browser().get("account")
+ok("page=login" in url, "anonymous visitors cannot open account settings")
+code, url, page = member_a.get("manage-orders")
+ok(code == 403, "Member is forbidden from Admin work queue")
+
+# Changing password requires old password and matching confirmation.
+code, url, page = member_a.post({
+    "action": "account-password-change", "current_password": "wrong",
+    "new_password": "member-a-new-passphrase",
+    "confirm_password": "member-a-new-passphrase",
+}, "account")
+ok(code == 200 and "page=account" in url and "ไม่ถูกต้อง" in page,
+   "wrong current password cannot change member password")
+code, url, page = member_a.post({
+    "action": "account-password-change", "current_password": "member-a-passphrase",
+    "new_password": "member-a-new-passphrase",
+    "confirm_password": "member-a-new-passphrase",
+}, "account")
+ok(code == 200 and "page=account" in url and "เปลี่ยนรหัสผ่านเรียบร้อย" in page,
+   "member changes their own password")
+code, url, page = member_a.get("account")
+ok(code == 200, "current browser remains logged in after password change")
+code, url, page = independent.get("progress")
+ok("page=login" in url, "old browser session revoked after password change")
+
+old_login = Browser()
+code, url, page = old_login.post({
+    "action":"login", "email":"member-a@example.test",
+    "password":"member-a-passphrase"
+}, "login")
+ok("page=login" in url, "old member password no longer logs in")
+new_login = Browser()
+code, url, page = new_login.post({
+    "action":"login", "email":"member-a@example.test",
+    "password":"member-a-new-passphrase"
+}, "login")
+ok("page=progress" in url, "new member password can log in")
+
+# Deletion is self-service only, password protected and blocks unfinished orders.
+pending_member = sign_up_and_login("pending-delete@example.test", "pending-member-passphrase")
+code, url, page = new_self_order(pending_member, guest=False)
+ok("page=order" in url, "pending deletion test order created in isolated MySQL")
+code, url, page = pending_member.get("account")
+ok("ยังมีออร์เดอร์ไม่สิ้นสุด" in page, "account UI warns about unfinished orders")
+code, url, page = pending_member.post({
+    "action":"account-delete", "current_password":"pending-member-passphrase",
+    "delete_confirmation":"DELETE",
+}, "account")
+ok("page=account" in url and "ยังมีออร์เดอร์" in page,
+   "customer with active order cannot delete account")
+ok(query("SELECT email IS NOT NULL FROM laundry__users_tbl "
+         "WHERE email='pending-delete@example.test'") == "1",
+   "blocked account retains credentials and order")
+
+# Last active Admin cannot self-delete even with the correct password.
+code, url, page = admin.post({
+    "action":"account-delete", "current_password":"ci-admin-passphrase",
+    "delete_confirmation":"DELETE",
+}, "account")
+ok("page=account" in url and "แอดมินคนสุดท้าย" in page,
+   "last Admin cannot remove access to the whole shop")
+code, url, page = admin.get("manage-orders")
+ok(code == 200, "last Admin remains logged in and retains staff access")
+
+# An unreferenced member is physically deleted; incorrect password is rejected.
+code, url, page = member_b.post({
+    "action":"account-delete", "current_password":"wrong",
+    "delete_confirmation":"DELETE",
+}, "account")
+ok("page=account" in url and "ไม่สามารถลบบัญชี" in page,
+   "wrong password cannot remove account")
+code, url, page = member_b.post({
+    "action":"account-delete", "current_password":"member-b-passphrase",
+    "delete_confirmation":"DELETE",
+}, "account")
+ok("account_removed=1" in url, "unreferenced member deletes own account")
+ok(query("SELECT COUNT(*) FROM laundry__users_tbl WHERE email='member-b@example.test'") == "0",
+   "unreferenced deleted account row removed")
+code, url, page = member_b.get("account")
+ok("page=login" in url, "deleted member session can no longer access account")
+
+# When order/audit history references the member, anonymize identity and preserve history.
+code, url, page = member_a.post({
+    "action":"account-delete", "current_password":"member-a-new-passphrase",
+    "delete_confirmation":"DELETE",
+}, "account")
+ok("account_removed=1" in url, "member with closed order can delete login account")
+ok(query("SELECT COUNT(*) FROM laundry__users_tbl WHERE email='member-a@example.test'") == "0",
+   "deleted account email is not retained")
+ok(query("SELECT COUNT(*) FROM laundry__orders_tbl WHERE id=%d" % member_id) == "1",
+   "completed order remains intact after account deletion")
+ok(query("SELECT u.email IS NULL FROM laundry__orders_tbl o JOIN laundry__users_tbl u "
+         "ON u.id=o.customer_id WHERE o.id=%d" % member_id) == "1",
+   "historical member account PII is anonymized")
+code, url, page = new_login.get("progress")
+ok("page=login" in url, "other member browser invalid after account deletion")
 
 print("ALL FINAL SYSTEM HTTP SMOKE TESTS PASSED: %d checks" % total)
