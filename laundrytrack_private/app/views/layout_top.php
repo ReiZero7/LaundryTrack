@@ -39,7 +39,7 @@ $flashMessage = take_flash();
         <p class="menu-title">เมนูหลัก</p>
         <nav class="nav" aria-label="เมนูหลัก">
             <?php foreach ($nav as [$dest, $label, $glyph]): ?>
-            <a class="nav-item <?= $page === $dest ? 'active' : '' ?>" href="<?= e(url($dest)) ?>"><span class="nav-glyph"><?= e($glyph) ?></span><?= e($label) ?></a>
+            <a class="nav-item <?= $page === $dest ? 'active' : '' ?>" href="<?= e(url($dest)) ?>" <?= $page === $dest ? 'aria-current="page"' : '' ?>><span class="nav-glyph"><?= e($glyph) ?></span><?= e($label) ?></a>
             <?php endforeach; ?>
         </nav>
         <div class="sidebar-profile"><span class="avatar"><?= e(mb_substr_safe($user['full_name'], 0, 1)) ?></span><div><strong><?= e($user['full_name']) ?></strong><small><?= $user['role'] === 'admin' ? 'ผู้ดูแลร้าน' : 'ลูกค้า' ?></small></div></div>
