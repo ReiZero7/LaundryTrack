@@ -4,9 +4,16 @@ $stmt = db()->prepare('SELECT o.*,pr.requested_at AS pickup_requested_at,pr.conf
 $stmt->execute(is_admin() ? [$id] : [$id, current_user()['id']]);
 $order = $stmt->fetch();
 if (!$order) { http_response_code(404); echo '<div class="empty-state"><h2>ไม่พบออร์เดอร์หรือไม่มีสิทธิ์เข้าถึง</h2><a href="' . e(url('orders')) . '" class="btn btn-primary">กลับไปรายการ</a></div>'; return; }
-$stmt = db()->prepare('SELECT oi.*,s.name,s.unit FROM laundry__order_items_tbl oi JOIN laundry__services_tbl s ON s.id=oi.service_id WHERE oi.order_id=? ORDER BY oi.id');
+$stmt = db()->prepare('SELECT oi.*,s.name,s.unit,w.completed_at AS work_completed_at
+    FROM laundry__order_items_tbl oi
+    JOIN laundry__services_tbl s ON s.id=oi.service_id
+    LEFT JOIN laundry__order_item_work_tbl w ON w.order_item_id=oi.id
+    WHERE oi.order_id=? ORDER BY oi.id');
 $stmt->execute([$id]);
 $items = $stmt->fetchAll();
+$allServiceLines = count($items);
+$finishedServiceLines = count(array_filter($items, static fn(array $item): bool => $item['work_completed_at'] !== null));
+$workEditable = is_admin() && in_array($order['status'], ['received','washing','drying'], true);
 $stmt = db()->prepare('SELECT h.*,u.full_name AS actor FROM laundry__status_history_tbl h JOIN laundry__users_tbl u ON u.id=h.changed_by WHERE h.order_id=? ORDER BY h.id');
 $stmt->execute([$id]);
 $history = $stmt->fetchAll();
@@ -27,7 +34,7 @@ $nextStates = $transitions[$order['status']] ?? [];
     <p>ลูกค้าส่งคำสั่งบริการผ่านเว็บไซต์แล้ว แต่ร้านต้องตรวจสอบและรับผ้าจริงก่อนเปลี่ยนเป็นรับผ้าแล้ว</p>
 </section>
 <?php endif; ?>
-<div class="detail-grid"><section class="panel"><div class="panel-header"><h2>ข้อมูลออร์เดอร์</h2><span class="status <?= status_class($order['status']) ?>"><?= e(order_status_label($order['status'], $order['creator_role'])) ?></span></div><div class="info-grid"><div><small>ลูกค้า</small><strong><?= e($order['customer_name']) ?></strong></div><div><small>อีเมล</small><strong><?= e($order['customer_email'] ?: '— (Guest)') ?></strong></div><div><small>เบอร์โทร</small><strong><?= e($order['customer_phone'] ?: '—') ?></strong></div><div><small>กำหนดรับผ้า</small><strong><?= e(date('d/m/Y H:i', strtotime($order['due_at']))) ?></strong></div></div><h3 class="subheading">รายการบริการ</h3><div class="table-wrap" role="region" aria-label="ตารางรายการบริการของออร์เดอร์" tabindex="0"><table><thead><tr><th>บริการ</th><th>จำนวน</th><th>ราคา/หน่วย</th><th>รวม</th></tr></thead><tbody><?php foreach ($items as $i): ?><tr><td><?= e($i['name']) ?></td><td><?= money($i['quantity']) ?> <?= e($i['unit']) ?></td><td>฿<?= money($i['unit_price']) ?></td><td>฿<?= money($i['subtotal']) ?></td></tr><?php endforeach; ?></tbody></table></div><p class="mobile-table-hint">ตารางรายการบริการสามารถเลื่อนซ้าย–ขวาเพื่อดูข้อมูลทั้งหมดได้</p><div class="order-totals"><span>ค่าบริการรวม</span><strong>฿<?= money($order['total_amount']) ?></strong></div><?php if ($order['notes']): ?><p class="note-box"><strong>หมายเหตุ:</strong> <?= nl2br(e($order['notes'])) ?></p><?php endif; ?></section>
+<div class="detail-grid"><section class="panel"><div class="panel-header"><h2>ข้อมูลออร์เดอร์</h2><span class="status <?= status_class($order['status']) ?>"><?= e(order_status_label($order['status'], $order['creator_role'])) ?></span></div><div class="info-grid"><div><small>ลูกค้า</small><strong><?= e($order['customer_name']) ?></strong></div><div><small>อีเมล</small><strong><?= e($order['customer_email'] ?: '— (Guest)') ?></strong></div><div><small>เบอร์โทร</small><strong><?= e($order['customer_phone'] ?: '—') ?></strong></div><div><small>กำหนดรับผ้า</small><strong><?= e(date('d/m/Y H:i', strtotime($order['due_at']))) ?></strong></div></div><h3 class="subheading">รายการบริการทั้งหมด (<?= $allServiceLines ?> รายการ)</h3><div class="table-wrap" role="region" aria-label="ตารางรายการบริการของออร์เดอร์" tabindex="0"><table><thead><tr><th>บริการ</th><th>จำนวน</th><th>ราคา/หน่วย</th><th>รวม</th></tr></thead><tbody><?php foreach ($items as $i): ?><tr><td><?= e($i['name']) ?></td><td><?= money($i['quantity']) ?> <?= e($i['unit']) ?></td><td>฿<?= money($i['unit_price']) ?></td><td>฿<?= money($i['subtotal']) ?></td></tr><?php endforeach; ?></tbody></table></div><p class="mobile-table-hint">ตารางรายการบริการสามารถเลื่อนซ้าย–ขวาเพื่อดูข้อมูลทั้งหมดได้</p><div class="order-totals"><span>ค่าบริการรวม</span><strong>฿<?= money($order['total_amount']) ?></strong></div><?php if ($order['notes']): ?><p class="note-box"><strong>หมายเหตุ:</strong> <?= nl2br(e($order['notes'])) ?></p><?php endif; ?></section>
 <section class="panel"><div class="panel-header"><h2>ติดตามสถานะ</h2></div><ol class="timeline"><?php foreach ($history as $h): ?><li><div class="timeline-dot"></div><strong><?= e(order_status_label($h['new_status'], $order['creator_role'])) ?></strong><small><?= e(date('d/m/Y H:i', strtotime($h['changed_at']))) ?> • <?= e($h['actor']) ?></small><?php if ($h['note']): ?><p><?= e($h['note']) ?></p><?php endif; ?></li><?php endforeach; ?></ol>
 <?php if (!is_admin() && $order['status'] === 'ready'): ?>
 <div class="pickup-confirm">
@@ -70,6 +77,44 @@ $nextStates = $transitions[$order['status']] ?? [];
 
 <!-- Guest QR controls are outside the two-column detail grid so both
      guest and member order details retain identical information/timeline layout. -->
+<?php if (is_admin()): ?>
+<section class="panel service-work-panel" id="service-work">
+    <div class="panel-header">
+      <div><h2>ตรวจสอบงานแต่ละบริการ</h2><p>ต้องทำงานทุกบริการให้ครบก่อนแจ้งว่าผ้าพร้อมรับ</p></div>
+      <span class="service-work-counter"><?= $finishedServiceLines ?>/<?= $allServiceLines ?> เสร็จแล้ว</span>
+    </div>
+    <div class="service-work-list">
+      <?php foreach ($items as $item): ?>
+        <div class="service-work-item <?= $item['work_completed_at'] !== null ? 'is-complete' : '' ?>">
+          <div class="service-work-item-text">
+            <strong><?= e($item['name']) ?></strong>
+            <small>จำนวน <?= money($item['quantity']) ?> <?= e($item['unit']) ?> · <?= $item['work_completed_at'] !== null ? 'ทำเสร็จแล้ว' : 'ยังไม่เสร็จ' ?></small>
+          </div>
+          <?php if ($workEditable): ?>
+          <form method="post" action="index.php" class="service-work-form">
+            <?= csrf_field() ?>
+            <input type="hidden" name="action" value="order-item-work">
+            <input type="hidden" name="id" value="<?= (int)$order['id'] ?>">
+            <input type="hidden" name="item_id" value="<?= (int)$item['id'] ?>">
+            <input type="hidden" name="completed" value="<?= $item['work_completed_at'] === null ? 'yes' : 'no' ?>">
+            <button type="submit" class="btn <?= $item['work_completed_at'] === null ? 'btn-primary' : 'btn-light' ?>">
+              <?= $item['work_completed_at'] === null ? '✓ ทำบริการนี้เสร็จแล้ว' : '↺ ย้อนกลับเป็นงานค้าง' ?>
+            </button>
+          </form>
+          <?php else: ?>
+          <span class="status <?= $item['work_completed_at'] !== null ? 'status-ready' : 'status-pending' ?>">
+            <?= $item['work_completed_at'] !== null ? 'เสร็จแล้ว' : ($order['status'] === 'ready' || $order['status'] === 'picked_up' ? 'งานก่อนใช้ระบบติดตาม' : 'ยังไม่เสร็จ') ?>
+          </span>
+          <?php endif; ?>
+        </div>
+      <?php endforeach; ?>
+    </div>
+    <?php if ($order['status'] === 'drying' && $finishedServiceLines < $allServiceLines): ?>
+    <p class="form-help" role="status">ยังมีงานค้าง <?= $allServiceLines - $finishedServiceLines ?> บริการ (เช่น งานรีดผ้า) ต้องทำให้เสร็จและบันทึกก่อนเปลี่ยนสถานะเป็นพร้อมรับผ้า</p>
+    <?php endif; ?>
+</section>
+<?php endif; ?>
+
 <?php if (is_admin() && $order['customer_email'] === null): ?>
 <div class="order-qr-below">
 <section id="order-qr-tools" class="panel walkin-qr-panel">
