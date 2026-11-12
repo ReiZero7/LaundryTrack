@@ -110,14 +110,28 @@ def new_self_order(browser, guest=True):
     body = {
         "action": "self-order-create",
         "due_at": future,
-        "service_id[]": ["1"],
-        "quantity[]": ["2"],
+        "service_id[]": ["1", "2"],
+        "quantity[]": ["2", "1"],
         "notes": "CI smoke order",
         "website": "",
     }
     if guest:
         body.update(full_name="CI Guest", phone="0812345678")
     return browser.post(body, "self-order")
+
+
+def item_ids(order_id):
+    rows = query("SELECT id FROM laundry__order_items_tbl WHERE order_id=%d ORDER BY id" % order_id)
+    return [int(x) for x in rows.splitlines() if x]
+
+
+def update_work(admin, order_id, item_id, work_status):
+    code, url, page = admin.post({
+        "action":"order-item-progress", "id":str(order_id),
+        "item_id":str(item_id), "work_status":work_status,
+    }, "order", id=str(order_id))
+    ok(code == 200 and "page=order" in url, "Admin updates a single service task")
+    return page
 
 
 def sign_up_and_login(email, password):
@@ -163,8 +177,17 @@ token = extract_tracking_token(page)
 guest_order = order_for_hash(token)
 ok(guest_order is not None and status(guest_order) == "requested",
    "guest order persisted as requested")
-ok(count("SELECT COUNT(*) FROM laundry__order_items_tbl WHERE order_id=%d" % guest_order) == 1,
-   "guest order item persisted")
+ok(count("SELECT COUNT(*) FROM laundry__order_items_tbl WHERE order_id=%d" % guest_order) == 2,
+   "Guest order stores BOTH wash and ironing services")
+ok(query("SELECT GROUP_CONCAT(service_id ORDER BY id) FROM laundry__order_items_tbl "
+         "WHERE order_id=%d" % guest_order) == "1,2",
+   "Guest order persists each requested service ID separately")
+ok(query("SELECT total_amount FROM laundry__orders_tbl WHERE id=%d" % guest_order) == "120.00",
+   "Guest multi-service total includes wash and ironing")
+ok(count("SELECT COUNT(*) FROM laundry__order_item_progress_tbl p "
+         "JOIN laundry__order_items_tbl oi ON oi.id=p.order_item_id "
+         "WHERE oi.order_id=%d AND p.work_status='pending'" % guest_order) == 2,
+   "Both Guest service tasks begin pending")
 code, url, page = guest.get("track", token=token)
 ok(code == 200 and "CI Guest" not in page and "0812345678" not in page,
    "QR landing page does not show customer name/phone")
@@ -261,11 +284,39 @@ code, url, page = admin.post({
 }, "order", id=str(guest_order))
 ok(status(guest_order) == "received", "admin cannot jump from received directly to ready")
 
-for state in ["washing", "drying", "ready"]:
+for state in ["washing", "drying"]:
     code, url, page = admin.post({
         "action": "order-status", "id": str(guest_order), "status": state,
     }, "order", id=str(guest_order))
     ok(status(guest_order) == state, "admin transition reached " + state)
+
+guest_lines = item_ids(guest_order)
+ok(len(guest_lines) == 2, "Guest service task IDs include both services")
+code, url, page = admin.post({
+    "action":"order-status", "id":str(guest_order), "status":"ready"
+}, "order", id=str(guest_order))
+ok(status(guest_order) == "drying" and "ยังมีบริการที่ทำไม่เสร็จ" in page,
+   "Cannot mark Guest order ready before service work is finished")
+update_work(admin, guest_order, guest_lines[0], "done")
+update_work(admin, guest_order, guest_lines[1], "working")
+code, url, page = admin.get("order", id=str(guest_order))
+ok("กำลังรีดผ้า" in page and "1/2" in page,
+   "Ironing remains visible as IN PROGRESS after laundry task completed")
+code, url, page = admin.post({
+    "action":"order-status", "id":str(guest_order), "status":"ready"
+}, "order", id=str(guest_order))
+ok(status(guest_order) == "drying", "Finishing only laundry cannot finish entire Guest order")
+code, url, page = outsider.get("track-portal")
+ok("รีดผ้า CI" in page and "กำลังรีดผ้า" in page,
+   "QR Guest sees second ironing task and its progress without personal details")
+code, url, page = outsider.get("track-feed")
+ok('"services":' in page and '"status":"working"' in page,
+   "Guest live feed includes independent task progress")
+update_work(admin, guest_order, guest_lines[1], "done")
+code, url, page = admin.post({
+    "action":"order-status", "id":str(guest_order), "status":"ready"
+}, "order", id=str(guest_order))
+ok(status(guest_order) == "ready", "Both tasks done allow Guest order ready")
 
 ok(count("SELECT COUNT(*) FROM laundry__status_history_tbl WHERE order_id=%d" % guest_order) == 5,
    "initial and four valid guest status changes recorded")
@@ -345,6 +396,10 @@ code, url, page = new_self_order(member_a, guest=False)
 ok(code == 200 and "page=order" in url, "registered member can create self-service order")
 member_id = int(parse_qs(urlparse(url).query)["id"][0])
 ok(status(member_id) == "requested", "member new order starts in requested")
+ok(len(item_ids(member_id)) == 2,
+   "Member order also stores two selected services")
+code, url, page = member_a.get("order", id=str(member_id))
+ok("รีดผ้า CI" in page, "Member order detail displays ironing service")
 code, url, page = member_a.get("progress")
 ok(code == 200 and "data-progress-order" in page, "member progress shows own active order")
 ok('data-mobile-menu' in page and 'id="site-navigation"' in page,
@@ -365,12 +420,29 @@ code, url, page = member_b.post({
 ok(code == 403 and status(member_id) == "requested",
    "customer cannot issue admin-only status transition")
 
-for state in ["received", "washing", "drying", "ready"]:
+for state in ["received", "washing", "drying"]:
     values = {"action": "order-status", "id": str(member_id), "status": state}
     if state == "received":
         values["dropoff_confirmed"] = "yes"
     code, url, page = admin.post(values, "order", id=str(member_id))
     ok(status(member_id) == state, "member order admin transition " + state)
+code, url, page = member_a.post({
+    "action":"order-item-progress", "id":str(member_id),
+    "item_id":str(item_ids(member_id)[1]), "work_status":"done",
+}, "order", id=str(member_id))
+ok(code == 403, "Member cannot change service-item workflow")
+for item_id in item_ids(member_id):
+    update_work(admin, member_id, item_id, "done")
+code, url, page = member_a.get("progress")
+ok("รีดผ้าเสร็จแล้ว" in page,
+   "Member progress shows separate ironing completion")
+code, url, page = member_a.get("progress-feed")
+ok('"services":' in page and '"status":"done"' in page,
+   "Member scoped live feed includes completed service tasks")
+code, url, page = admin.post({
+    "action":"order-status", "id":str(member_id), "status":"ready"
+}, "order", id=str(member_id))
+ok(status(member_id) == "ready", "Member order ready after BOTH services marked done")
 
 code, url, page = member_b.post({
     "action": "order-confirm-pickup", "id": str(member_id)
@@ -482,7 +554,7 @@ code, url, page = pending_member.get("account")
 ok("ยังมีออร์เดอร์ไม่สิ้นสุด" in page, "account UI warns about unfinished orders")
 code, url, page = pending_member.post({
     "action":"account-delete", "current_password":"pending-member-passphrase",
-    "delete_confirmation":"DELETE",
+    "delete_confirmed":"yes",
 }, "account")
 ok("page=account" in url and "ยังมีออร์เดอร์" in page,
    "customer with active order cannot delete account")
@@ -493,23 +565,33 @@ ok(query("SELECT email IS NOT NULL FROM laundry__users_tbl "
 # Last active Admin cannot self-delete even with the correct password.
 code, url, page = admin.post({
     "action":"account-delete", "current_password":"ci-admin-passphrase",
-    "delete_confirmation":"DELETE",
+    "delete_confirmed":"yes",
 }, "account")
 ok("page=account" in url and "แอดมินคนสุดท้าย" in page,
    "last Admin cannot remove access to the whole shop")
 code, url, page = admin.get("manage-orders")
 ok(code == 200, "last Admin remains logged in and retains staff access")
 
+# Deletion does NOT require typing a word; missing checkbox is rejected.
+code, url, page = member_b.get("account")
+ok('name="delete_confirmed"' in page and 'name="delete_confirmation"' not in page,
+   "Delete UI uses a required checkbox instead of typed DELETE")
+code, url, page = member_b.post({
+    "action":"account-delete", "current_password":"member-b-passphrase",
+}, "account")
+ok("page=account" in url and "ติ๊กยืนยัน" in page,
+   "Deletion still requires confirmation checkbox plus current password")
+
 # An unreferenced member is physically deleted; incorrect password is rejected.
 code, url, page = member_b.post({
     "action":"account-delete", "current_password":"wrong",
-    "delete_confirmation":"DELETE",
+    "delete_confirmed":"yes",
 }, "account")
 ok("page=account" in url and "ไม่สามารถลบบัญชี" in page,
    "wrong password cannot remove account")
 code, url, page = member_b.post({
     "action":"account-delete", "current_password":"member-b-passphrase",
-    "delete_confirmation":"DELETE",
+    "delete_confirmed":"yes",
 }, "account")
 ok("account_removed=1" in url, "unreferenced member deletes own account")
 ok(query("SELECT COUNT(*) FROM laundry__users_tbl WHERE email='member-b@example.test'") == "0",
@@ -520,7 +602,7 @@ ok("page=login" in url, "deleted member session can no longer access account")
 # When order/audit history references the member, anonymize identity and preserve history.
 code, url, page = member_a.post({
     "action":"account-delete", "current_password":"member-a-new-passphrase",
-    "delete_confirmation":"DELETE",
+    "delete_confirmed":"yes",
 }, "account")
 ok("account_removed=1" in url, "member with closed order can delete login account")
 ok(query("SELECT COUNT(*) FROM laundry__users_tbl WHERE email='member-a@example.test'") == "0",
@@ -559,7 +641,7 @@ ok("page=account" in url and "เปลี่ยนรหัสผ่านเ�
    "Admin can change their own password")
 code, url, page = admin.post({
     "action":"account-delete", "current_password":"ci-admin-passphrase",
-    "delete_confirmation":"DELETE"
+    "delete_confirmed":"yes"
 }, "account")
 ok("account_removed=1" in url, "original Admin can delete when replacement active")
 ok(query("SELECT email IS NULL FROM laundry__users_tbl WHERE id=%d" % admin_id) == "1",
@@ -570,7 +652,7 @@ code, url, page = backup_admin.get("manage-orders")
 ok(code == 200, "replacement Admin continues to manage unfinished orders")
 code, url, page = backup_admin.post({
     "action":"account-delete", "current_password":"backup-admin-new-passphrase",
-    "delete_confirmation":"DELETE"
+    "delete_confirmed":"yes"
 }, "account")
 ok("page=account" in url and "แอดมินคนสุดท้าย" in page,
    "replacement Admin cannot delete the final active Admin")
