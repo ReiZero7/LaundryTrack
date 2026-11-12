@@ -45,15 +45,13 @@ $canDelete = !($me['role'] === 'customer' && $openOrderCount > 0);
   <?php elseif ($me['role'] === 'admin'): ?>
     <p class="account-warning">บัญชีแอดมินคนสุดท้ายจะไม่สามารถลบได้ เพื่อป้องกันร้านสูญเสียสิทธิ์เข้าจัดการระบบ</p>
   <?php endif; ?>
-  <form method="post" action="index.php" class="form-stack">
+  <form method="post" action="index.php" class="form-stack" data-account-delete>
     <?= csrf_field() ?>
     <input type="hidden" name="action" value="account-delete">
     <label>ยืนยันรหัสผ่านปัจจุบัน
       <input type="password" name="current_password" autocomplete="current-password" required maxlength="4096" <?= $canDelete ? '' : 'disabled' ?>>
     </label>
-    <label>พิมพ์ <strong>DELETE</strong> เพื่อยืนยัน
-      <input type="text" name="delete_confirmation" required pattern="DELETE" maxlength="6" autocomplete="off" placeholder="DELETE" <?= $canDelete ? '' : 'disabled' ?>>
-    </label>
+    <p class="account-warning">เมื่อลบบัญชีแล้วจะไม่สามารถใช้บัญชีนี้เข้าสู่ระบบได้อีก กรุณาตรวจสอบให้แน่ใจก่อนกดยืนยัน</p>
     <button class="btn btn-danger" type="submit" <?= $canDelete ? '' : 'disabled' ?>>ยืนยันลบบัญชีอย่างถาวร</button>
   </form>
 </section>
