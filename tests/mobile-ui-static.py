@@ -20,6 +20,10 @@ dashboard = source("laundrytrack_private/app/views/dashboard.php")
 order_start = source("laundrytrack_private/app/views/order-start.php")
 shop_qr = source("laundrytrack_private/app/views/shop-qr.php")
 router = source("public_html/laundrytrack/index.php")
+account = source("laundrytrack_private/app/views/account.php")
+actions = source("laundrytrack_private/app/actions.php")
+progress = source("laundrytrack_private/app/views/progress.php")
+migration = source("laundrytrack_private/migrations/2026-11-12_order_item_progress.sql")
 style = source("public_html/laundrytrack/assets/style.css")
 script = source("public_html/laundrytrack/assets/app.js")
 
@@ -65,6 +69,23 @@ checks = {
         'aria-label="ตารางรายการบริการของออร์เดอร์"' in details
         and 'tabindex="0"' in details
         and 'mobile-table-hint' in details,
+    "account deletion no longer asks for typed DELETE":
+        'name="delete_confirmed"' in account
+        and 'name="delete_confirmation"' not in account
+        and "post_string('delete_confirmed') !== 'yes'" in actions,
+    "order detail shows each selected service and staff-selectable work states":
+        "order_service_items($id)" in details
+        and 'name="order-item-progress"' not in details
+        and 'value="order-item-progress"' in details
+        and 'value="done"' in details and 'value="working"' in details,
+    "order ready state is gated on completion of all service work":
+        "Unfinished services" in actions
+        and "AND p.work_status='done'" not in actions
+        and 'work_status' in migration,
+    "Member and Guest live tracking show individual ironing service status":
+        'data-member-service-item' in progress
+        and 'data-guest-service-item' in guest_portal
+        and "item.services" in script and "data.services" in script,
     "accessibility motion preference remains honored":
         '@media(prefers-reduced-motion:reduce)' in style,
     "Member and Guest order-start choices are the only two cards":
