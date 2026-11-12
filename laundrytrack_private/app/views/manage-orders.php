@@ -39,6 +39,20 @@ $sql = 'SELECT o.id,o.order_no,o.received_at,o.due_at,o.status,
 $stmt = db()->prepare($sql);
 $stmt->execute($params);
 $queue = $stmt->fetchAll();
+$serviceProgressByOrder = [];
+if ($queue) {
+    $ids = array_map(static fn(array $item): int => (int)$item['id'], $queue);
+    $marks = implode(',', array_fill(0, count($ids), '?'));
+    $workStmt = db()->prepare("SELECT oi.order_id,COUNT(*) AS total,
+        COALESCE(SUM(p.work_status='done'),0) AS completed
+        FROM laundry__order_items_tbl oi
+        LEFT JOIN laundry__order_item_progress_tbl p ON p.order_item_id=oi.id
+        WHERE oi.order_id IN ($marks) GROUP BY oi.order_id");
+    $workStmt->execute($ids);
+    foreach ($workStmt->fetchAll() as $work) {
+        $serviceProgressByOrder[(int)$work['order_id']] = $work;
+    }
+}
 $stats = db()->query("SELECT
     COUNT(*) AS active_total,
     COALESCE(SUM(o.status='requested'),0) AS dropoff_pending,
@@ -94,6 +108,8 @@ $linkQuery = ['q'=>$search, 'status'=>$statusFilter];
             <span>รับรายการ: <?= e(date('d/m/Y H:i', strtotime($order['received_at']))) ?></span>
             <span>กำหนดรับ: <?= e(date('d/m/Y H:i', strtotime($order['due_at']))) ?></span>
             <span>ค่าบริการ: ฿<?= money($order['total_amount']) ?></span>
+            <?php $work = $serviceProgressByOrder[(int)$order['id']] ?? ['total'=>0,'completed'=>0]; ?>
+            <span class="queue-service-count">บริการเสร็จ <?= (int)$work['completed'] ?>/<?= (int)$work['total'] ?></span>
           </div>
           <?php if ($order['status'] === 'ready' && $order['pickup_requested_at']): ?>
             <p class="queue-pickup-alert">● ลูกค้าแจ้งขอรับผ้าแล้ว รอพนักงานตรวจสอบและยืนยันส่งมอบ</p>
