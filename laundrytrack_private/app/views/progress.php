@@ -37,30 +37,30 @@ $steps = [
 ?>
 <div class="member-progress-page" id="member-progress-page" data-feed="<?= e(url('progress-feed')) ?>">
     <section class="member-progress-hero">
-        <p class="eyebrow">YOUR LAUNDRY JOURNEY</p>
-        <h1>ความคืบหน้าการซักรีด</h1>
-        <p>สวัสดี <?= e(current_user()['full_name']) ?> ตรวจสอบทุกขั้นตอนการซักรีดของคุณได้ที่นี่</p>
+        <p class="eyebrow">📍 ติดตามงาน</p>
+        <h1>ออร์เดอร์ของฉัน</h1>
+        <p>👋 <?= e(current_user()['full_name']) ?></p>
         <div class="member-progress-hero-actions">
-            <a href="<?= e(url('self-order')) ?>" class="btn btn-primary">+ สร้างออร์เดอร์</a>
-            <a href="<?= e(url('orders')) ?>" class="btn btn-light">ดูประวัติรายการ</a>
+            <a href="<?= e(url('self-order')) ?>" class="btn btn-primary">➕ สั่งซัก</a>
+            <a href="<?= e(url('orders')) ?>" class="btn btn-light">🧾 ประวัติ</a>
         </div>
     </section>
 
     <?php if (!$activeOrders): ?>
         <section class="panel member-empty-progress">
             <div class="member-progress-empty-icon">🧺</div>
-            <h2>ยังไม่มีออร์เดอร์ที่กำลังดำเนินการ</h2>
-            <p>เลือกบริการซักรีดและสร้างออร์เดอร์ใหม่ได้เลย</p>
-            <a class="btn btn-primary" href="<?= e(url('self-order')) ?>">สร้างออร์เดอร์แรก</a>
+            <h2>ยังไม่มีงานซัก</h2>
+            <p>เริ่มสั่งซักได้เลย 🧺</p>
+            <a class="btn btn-primary" href="<?= e(url('self-order')) ?>">🧺 สั่งซัก</a>
         </section>
     <?php else: ?>
-        <section class="member-progress-intro"><h2>กำลังดำเนินการ</h2><span><?= count($activeOrders) ?> ออร์เดอร์ล่าสุด</span></section>
+        <section class="member-progress-intro"><h2>🫧 กำลังซัก</h2><span><?= count($activeOrders) ?> งาน</span></section>
         <div class="member-progress-list">
         <?php foreach ($activeOrders as $o): ?>
             <?php $stage = order_progress_stage($o['status']); ?>
             <article class="panel member-progress-card" data-progress-order="<?= (int)$o['id'] ?>">
                 <div class="member-progress-card-head">
-                    <div><p class="eyebrow">LAUNDRY ORDER</p><h2><?= e($o['order_no']) ?></h2></div>
+                    <div><p class="eyebrow">ออร์เดอร์</p><h2><?= e($o['order_no']) ?></h2></div>
                     <span class="status <?= e(status_class($o['status'])) ?>" data-progress-status><?= e(status_label($o['status'])) ?></span>
                 </div>
                 <div class="member-progress-highlight">
@@ -80,14 +80,14 @@ $steps = [
                 <?php endforeach; ?>
                 </ol>
                 <?php if ($o['status'] === 'requested'): ?>
-                <p class="member-progress-guidance" data-progress-guidance>กรุณานำผ้ามาส่งที่ร้าน เมื่อพนักงานตรวจรับแล้วสถานะจะอัปเดต</p>
+                <p class="member-progress-guidance" data-progress-guidance>🧺 นำผ้ามาส่งที่ร้านเพื่อเริ่มซัก</p>
                 <?php elseif ($o['status'] === 'ready'): ?>
-                <p class="member-progress-guidance" data-progress-guidance><?= $o['pickup_requested_at'] ? '✓ แจ้งขอรับผ้าแล้ว กรุณารอพนักงานยืนยันการส่งมอบ' : '🔔 ผ้าพร้อมรับแล้ว กรุณาดูรายละเอียดเพื่อแจ้งขอรับผ้า' ?></p>
+                <p class="member-progress-guidance" data-progress-guidance><?= $o['pickup_requested_at'] ? '✅ แจ้งรับแล้ว · รอพนักงานส่งมอบ' : '🔔 พร้อมรับผ้า · กดดูรายละเอียด' ?></p>
                 <?php else: ?>
-                <p class="member-progress-guidance" data-progress-guidance>ระบบอัปเดตความคืบหน้าทุกประมาณ 30 วินาทีขณะเปิดเว็บไซต์</p>
+                <p class="member-progress-guidance" data-progress-guidance>🔄 อัปเดตทุก 30 วินาทีขณะเปิดหน้า</p>
                 <?php endif; ?>
                 <div class="member-service-progress">
-                  <h3>ความคืบหน้าแต่ละบริการ</h3>
+                  <h3>🫧 บริการที่สั่ง</h3>
                   <ul class="service-progress-list">
                     <?php foreach ($servicesByOrder[(int)$o['id']] ?? [] as $service): ?>
                     <li data-member-service-item="<?= (int)$service['id'] ?>">
@@ -98,8 +98,8 @@ $steps = [
                   </ul>
                 </div>
                 <div class="member-progress-foot">
-                    <span>กำหนดรับประมาณ <?= e(date('d/m/Y H:i', strtotime($o['due_at']))) ?></span>
-                    <a class="btn btn-primary" href="<?= e(url('order', ['id' => (int)$o['id']])) ?>">ดูรายละเอียด<?= $o['status'] === 'ready' ? ' / แจ้งขอรับผ้า' : '' ?></a>
+                    <span>⏰ รับประมาณ <?= e(date('d/m/Y H:i', strtotime($o['due_at']))) ?></span>
+                    <a class="btn btn-primary" href="<?= e(url('order', ['id' => (int)$o['id']])) ?>"><?= $o['status'] === 'ready' ? '🔔 แจ้งรับผ้า' : 'ดูงาน →' ?></a>
                 </div>
             </article>
         <?php endforeach; ?>
@@ -107,7 +107,7 @@ $steps = [
     <?php endif; ?>
 
     <section class="panel member-recent-history">
-        <div class="panel-header"><div><h2>ประวัติรายการล่าสุด</h2><p>ออร์เดอร์ที่รับคืนแล้วหรือยกเลิก</p></div><a class="text-link" href="<?= e(url('orders')) ?>">ดูประวัติทั้งหมด →</a></div>
+        <div class="panel-header"><div><h2>🧾 ประวัติล่าสุด</h2></div><a class="text-link" href="<?= e(url('orders')) ?>">ดูทั้งหมด →</a></div>
         <?php if (!$recentHistory): ?>
             <p class="muted">ยังไม่มีรายการที่เสร็จสิ้น</p>
         <?php else: ?>
