@@ -20,7 +20,7 @@ $selfServiceWaitingDropoff = $order['status'] === 'requested';
 $transitions = ['requested' => ['received','cancelled'], 'received' => ['washing','cancelled'], 'washing' => ['drying'], 'drying' => ['ready']];
 $nextStates = $transitions[$order['status']] ?? [];
 ?>
-<div class="page-heading"><div><p class="eyebrow">ORDER DETAIL</p><h1>ออร์เดอร์ <?= e($order['order_no']) ?></h1><p>สร้างเมื่อ <?= e(date('d/m/Y H:i', strtotime($order['received_at']))) ?></p></div><a class="btn btn-light" href="<?= e(url('orders')) ?>">← กลับรายการ</a></div>
+<div class="page-heading"><div><p class="eyebrow">ORDER DETAIL</p><h1>ออร์เดอร์ <?= e($order['order_no']) ?></h1><p>สร้างเมื่อ <?= e(date('d/m/Y H:i', strtotime($order['received_at']))) ?></p></div><a class="btn btn-light" href="<?= e(url(is_admin() ? 'manage-orders' : 'orders')) ?>">← <?= is_admin() ? 'กลับหน้าจัดการออร์เดอร์' : 'กลับรายการ' ?></a></div>
 <?php if ($selfServiceWaitingDropoff): ?>
 <section class="panel order-self-identity">
     <strong>🧺 ออร์เดอร์จากลูกค้า: ยังรอตรวจรับผ้าจริง</strong>
