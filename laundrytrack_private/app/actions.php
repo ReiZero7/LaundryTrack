@@ -50,6 +50,7 @@ function process_action(): never {
                     flash('อีเมลหรือรหัสผ่านไม่ถูกต้อง', 'error'); go('login', $nextPage === 'self-order' ? ['next' => 'self-order'] : []);
                 }
                 session_regenerate_id(true);
+                $_SESSION['auth_fingerprint'] = hash('sha256', (string)$user['password_hash']);
                 unset($user['password_hash']);
                 $_SESSION['user'] = $user;
                 $_SESSION['session_started_at'] = time();
@@ -58,6 +59,128 @@ function process_action(): never {
                 $_SESSION['csrf'] = bin2hex(random_bytes(32));
                 flash('เข้าสู่ระบบสำเร็จ');
                 go(($user['role'] === 'customer') ? $nextPage : 'dashboard');
+            case 'account-password-change':
+                require_login();
+                $me = current_user();
+                $currentPassword = is_string($_POST['current_password'] ?? null) ? $_POST['current_password'] : '';
+                $newPassword = is_string($_POST['new_password'] ?? null) ? $_POST['new_password'] : '';
+                $confirmPassword = is_string($_POST['confirm_password'] ?? null) ? $_POST['confirm_password'] : '';
+                if (strlen($newPassword) < 12 || strlen($newPassword) > 4096
+                    || strlen($currentPassword) > 4096 || $newPassword !== $confirmPassword
+                    || hash_equals($currentPassword, $newPassword)) {
+                    flash('รหัสผ่านใหม่ต้องมีอย่างน้อย 12 ตัวอักษร ไม่ซ้ำรหัสเดิม และยืนยันให้ตรงกัน', 'error');
+                    go('account');
+                }
+                $pdo = db();
+                $pdo->beginTransaction();
+                try {
+                    $stmt = $pdo->prepare('SELECT password_hash FROM laundry__users_tbl WHERE id=? AND email IS NOT NULL FOR UPDATE');
+                    $stmt->execute([(int)$me['id']]);
+                    $oldHash = $stmt->fetchColumn();
+                    if (!is_string($oldHash) || !password_verify($currentPassword, $oldHash)) {
+                        throw new DomainException('Incorrect current password');
+                    }
+                    $newHash = password_hash($newPassword, PASSWORD_DEFAULT);
+                    $stmt = $pdo->prepare('UPDATE laundry__users_tbl SET password_hash=? WHERE id=? AND email IS NOT NULL');
+                    $stmt->execute([$newHash, (int)$me['id']]);
+                    if ($stmt->rowCount() !== 1) throw new DomainException('Account changed');
+                    $pdo->commit();
+                    // Every other browser still has the old fingerprint and loses access.
+                    session_regenerate_id(true);
+                    $_SESSION['auth_fingerprint'] = hash('sha256', $newHash);
+                    $_SESSION['session_started_at'] = time();
+                    $_SESSION['session_last_seen'] = time();
+                    $_SESSION['csrf'] = bin2hex(random_bytes(32));
+                    flash('เปลี่ยนรหัสผ่านเรียบร้อย อุปกรณ์อื่นต้องเข้าสู่ระบบใหม่');
+                    go('account');
+                } catch (Throwable $e) {
+                    if ($pdo->inTransaction()) $pdo->rollBack();
+                    if ($e instanceof DomainException) {
+                        flash('รหัสผ่านปัจจุบันไม่ถูกต้องหรือบัญชีไม่พร้อมใช้งาน', 'error');
+                        go('account');
+                    }
+                    throw $e;
+                }
+            case 'account-delete':
+                require_login();
+                $me = current_user();
+                $currentPassword = is_string($_POST['current_password'] ?? null) ? $_POST['current_password'] : '';
+                if (post_string('delete_confirmation') !== 'DELETE' || strlen($currentPassword) > 4096) {
+                    flash('กรุณาพิมพ์ DELETE และกรอกรหัสผ่านปัจจุบันเพื่อยืนยัน', 'error');
+                    go('account');
+                }
+                $pdo = db();
+                $pdo->beginTransaction();
+                try {
+                    if ($me['role'] === 'admin') {
+                        // Serialise staff deletions so two admins cannot both remove the last admin.
+                        $admins = $pdo->query("SELECT id,email FROM laundry__users_tbl WHERE role='admin' ORDER BY id FOR UPDATE")->fetchAll();
+                        $activeAdmins = array_filter($admins, static fn(array $a): bool => $a['email'] !== null);
+                        if (count($activeAdmins) <= 1) throw new DomainException('Last active admin');
+                    }
+                    $stmt = $pdo->prepare('SELECT password_hash,role FROM laundry__users_tbl WHERE id=? AND email IS NOT NULL FOR UPDATE');
+                    $stmt->execute([(int)$me['id']]);
+                    $account = $stmt->fetch();
+                    if (!$account || $account['role'] !== $me['role']
+                        || !password_verify($currentPassword, (string)$account['password_hash'])) {
+                        throw new DomainException('Invalid current password');
+                    }
+                    if ($me['role'] === 'customer') {
+                        $stmt = $pdo->prepare("SELECT id FROM laundry__orders_tbl
+                            WHERE customer_id=? AND status NOT IN ('picked_up','cancelled') LIMIT 1 FOR UPDATE");
+                        $stmt->execute([(int)$me['id']]);
+                        if ($stmt->fetchColumn() !== false) throw new DomainException('Open customer orders');
+                    }
+                    // Preserve orders, audit history and foreign key references;
+                    // erase the login credentials and direct identifying account fields.
+                    $queries = [
+                        ['SELECT id FROM laundry__orders_tbl WHERE customer_id=? OR created_by=? LIMIT 1',
+                            [(int)$me['id'], (int)$me['id']]],
+                        ['SELECT id FROM laundry__status_history_tbl WHERE changed_by=? LIMIT 1',
+                            [(int)$me['id']]],
+                        ['SELECT order_id FROM laundry__pickup_requests_tbl WHERE requested_by=? OR confirmed_by=? LIMIT 1',
+                            [(int)$me['id'], (int)$me['id']]],
+                    ];
+                    $referenced = false;
+                    foreach ($queries as [$sql, $args]) {
+                        $stmt = $pdo->prepare($sql);
+                        $stmt->execute($args);
+                        if ($stmt->fetchColumn() !== false) { $referenced = true; break; }
+                    }
+                    if ($referenced) {
+                        $stmt = $pdo->prepare('UPDATE laundry__users_tbl
+                            SET full_name=?, email=NULL, phone=NULL, password_hash=? WHERE id=?');
+                        $stmt->execute(['บัญชีที่ลบแล้ว', password_hash(bin2hex(random_bytes(32)), PASSWORD_DEFAULT),
+                            (int)$me['id']]);
+                    } else {
+                        $stmt = $pdo->prepare('DELETE FROM laundry__users_tbl WHERE id=?');
+                        $stmt->execute([(int)$me['id']]);
+                    }
+                    if ($stmt->rowCount() !== 1) throw new DomainException('Account not removed');
+                    $pdo->commit();
+                    $_SESSION = [];
+                    if (ini_get('session.use_cookies')) {
+                        $params = session_get_cookie_params();
+                        setcookie(session_name(), '', [
+                            'expires' => time()-3600, 'path' => $params['path'],
+                            'secure' => $params['secure'], 'httponly' => true, 'samesite' => 'Lax',
+                        ]);
+                    }
+                    session_destroy();
+                    go('home', ['account_removed' => 1]);
+                } catch (Throwable $e) {
+                    if ($pdo->inTransaction()) $pdo->rollBack();
+                    if ($e instanceof DomainException) {
+                        $msg = match ($e->getMessage()) {
+                            'Last active admin' => 'ไม่สามารถลบแอดมินคนสุดท้ายได้ ต้องมีแอดมินอื่นที่ใช้งานได้ก่อน',
+                            'Open customer orders' => 'ยังมีออร์เดอร์ที่ไม่สิ้นสุด กรุณารับผ้าหรือยกเลิกออร์เดอร์ให้เรียบร้อยก่อน',
+                            default => 'ไม่สามารถลบบัญชีได้ กรุณาตรวจสอบรหัสผ่านและลองใหม่',
+                        };
+                        flash($msg, 'error');
+                        go('account');
+                    }
+                    throw $e;
+                }
             case 'logout':
                 $_SESSION = [];
                 if (ini_get('session.use_cookies')) {
