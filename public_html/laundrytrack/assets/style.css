@@ -311,3 +311,60 @@ body{background:radial-gradient(circle at 92% 14%,#d5f3fa 0,transparent 30%),rad
   .mobile-menu-toggle,.mobile-sidebar-head,.mobile-nav-backdrop,.skip-link{display:none!important}
   .usage-step{box-shadow:none}
 }
+
+
+/* Staff work queue and self-service account settings (PR #14). */
+.dashboard-admin-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.queue-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:13px;margin-bottom:21px}
+.queue-stat{display:grid;gap:7px;min-width:0;padding:17px;background:#fff;border:1px solid #d7e8f0;
+ border-radius:15px;box-shadow:0 5px 16px #1b5c8010}
+.queue-stat span{color:#517284;font-size:12px;line-height:1.5}
+.queue-stat strong{color:#174e68;font-size:29px;line-height:1.15;font-variant-numeric:tabular-nums}
+.queue-stat-attention{background:#f0f9fe;border-color:#a6d8ee}
+.queue-stat-attention strong{color:#036f99}
+.queue-sort-note{margin:0 0 15px;color:#4f7081;font-size:13px}
+.queue-list{display:grid;gap:13px}
+.queue-order{display:flex;justify-content:space-between;align-items:center;gap:15px;
+ border:1px solid #d7e9f1;border-radius:15px;padding:19px;
+ background:linear-gradient(135deg,#fff,#f7fcff);min-width:0}
+.queue-order-main{min-width:0;flex:1}
+.queue-order-heading{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 9px}
+.queue-order-heading h2{font-size:17px;color:#14526f;margin:0;overflow-wrap:anywhere}
+.queue-order-main>p{margin:5px 0;color:#41697d;font-size:13px}
+.queue-order-meta{display:flex;gap:8px 19px;flex-wrap:wrap;font-size:12px;color:#4d7184}
+.queue-order .btn{flex:0 0 auto;min-height:46px}
+.queue-order .queue-pickup-alert{margin-top:11px;color:#086c69;font-weight:800;
+ padding:9px 12px;background:#e5f7ef;border:1px solid #bce8d7;border-radius:10px}
+.queue-order .queue-order-note{color:#93681b;font-weight:650}
+.queue-pages{display:flex;justify-content:center;align-items:center;gap:12px;
+ margin:21px 0 2px;flex-wrap:wrap;color:#486b7c}
+.account-page-layout{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(280px,.8fr);
+ align-items:start;gap:20px}
+.account-page-layout .panel{min-width:0}
+.account-section-title{font-size:18px;color:#1d4d67;margin:27px 0 14px}
+.account-delete-panel{border-color:#f2ccc9;background:linear-gradient(165deg,#fff,#fffafa)}
+.account-delete-panel>.panel-header h2{color:#9c3d3d}
+.account-delete-panel>p{line-height:1.8;color:#5b6572}
+.account-warning{padding:13px 14px;margin:16px 0;border:1px solid #f0c6a8;
+ border-radius:12px;background:#fff8eb;color:#8a561e!important;font-size:13px}
+.btn-danger{background:#ad343c;color:#fff;border-color:#982b34;box-shadow:0 4px 12px #9c303022}
+.btn-danger:hover{background:#8e222d;color:#fff}
+.btn-danger:focus-visible{outline:3px solid #ad343c;outline-offset:3px}
+@media(max-width:1100px){
+  .queue-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .account-page-layout{grid-template-columns:1fr}
+}
+@media(max-width:780px){
+  .dashboard-admin-actions{width:100%}
+  .dashboard-admin-actions .btn{flex:1 1 160px;white-space:normal;text-align:center}
+  .queue-order{align-items:stretch;flex-direction:column;padding:16px}
+  .queue-order .btn{width:100%;justify-content:center}
+  .queue-order-meta{display:grid;gap:5px}
+  .queue-order-heading{justify-content:space-between}
+  .account-page-layout .form-stack>.btn{width:100%}
+}
+@media(max-width:370px){
+  .queue-stats{grid-template-columns:1fr 1fr;gap:8px}
+  .queue-stat{padding:12px}
+  .queue-stat strong{font-size:23px}
+}

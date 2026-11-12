@@ -92,7 +92,7 @@ try {
         ], JSON_UNESCAPED_UNICODE);
         exit;
     }
-    if ($page === 'order-complete' || $page === 'join-after-order') {
+    if (in_array($page, ['order-complete','join-after-order','account'], true)) {
         header('Cache-Control: private, no-store, max-age=0');
         header('Referrer-Policy: no-referrer');
         header('X-Robots-Tag: noindex, nofollow');
@@ -101,9 +101,9 @@ try {
     if ($page === 'dashboard' && current_user() && !is_admin()) go('progress');
     $publicPages = ['home', 'login', 'register', 'track', 'track-portal', 'order-start', 'self-order', 'order-complete', 'join-after-order'];
     if (!in_array($page, $publicPages, true)) require_login();
-    $adminOnly = ['services', 'customers', 'new-order'];
+    $adminOnly = ['services', 'customers', 'new-order', 'manage-orders'];
     if (in_array($page, $adminOnly, true)) require_admin();
-    $allowed = ['home','login','register','dashboard','services','customers','new-order','orders','order','track','track-portal','order-start','self-order','order-complete','join-after-order','progress'];
+    $allowed = ['home','login','register','dashboard','services','customers','new-order','manage-orders','account','orders','order','track','track-portal','order-start','self-order','order-complete','join-after-order','progress'];
     if (!in_array($page, $allowed, true)) { http_response_code(404); $page = 'not-found'; }
     require PROJECT_ROOT . '/app/views/layout_top.php';
     require PROJECT_ROOT . '/app/views/' . $page . '.php';

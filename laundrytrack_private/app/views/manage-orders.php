@@ -1,0 +1,122 @@
+<?php
+require_admin();
+// The staff work queue is distinct from order history: active orders only,
+// oldest submitted orders first, regardless of their current processing stage.
+$allowedStatuses = ['requested','received','washing','drying','ready','pickup-pending'];
+$statusFilter = is_string($_GET['status'] ?? null) ? $_GET['status'] : '';
+if (!in_array($statusFilter, $allowedStatuses, true)) $statusFilter = '';
+$search = trim(is_string($_GET['q'] ?? null) ? $_GET['q'] : '');
+$search = mb_substr_safe($search, 0, 100);
+$filters = ["o.status NOT IN ('picked_up','cancelled')"];
+$params = [];
+if ($statusFilter === 'pickup-pending') {
+    $filters[] = "o.status='ready' AND pr.requested_at IS NOT NULL AND pr.confirmed_at IS NULL";
+} elseif ($statusFilter !== '') {
+    $filters[] = 'o.status=?';
+    $params[] = $statusFilter;
+}
+if ($search !== '') {
+    $filters[] = '(o.order_no LIKE ? OR u.full_name LIKE ?)';
+    $params[] = '%' . $search . '%';
+    $params[] = '%' . $search . '%';
+}
+$fromSql = ' FROM laundry__orders_tbl o
+    JOIN laundry__users_tbl u ON u.id=o.customer_id
+    LEFT JOIN laundry__pickup_requests_tbl pr ON pr.order_id=o.id';
+$whereSql = ' WHERE ' . implode(' AND ', $filters);
+$countStmt = db()->prepare('SELECT COUNT(*)' . $fromSql . $whereSql);
+$countStmt->execute($params);
+$total = (int)$countStmt->fetchColumn();
+$pageSize = 50;
+$pages = max(1, (int)ceil($total / $pageSize));
+$requestedPage = filter_var($_GET['p'] ?? 1, FILTER_VALIDATE_INT) ?: 1;
+$pageNumber = min(max(1, $requestedPage), $pages);
+$offset = ($pageNumber - 1) * $pageSize;
+$sql = 'SELECT o.id,o.order_no,o.received_at,o.due_at,o.status,
+    o.total_amount,u.full_name,pr.requested_at AS pickup_requested_at'
+    . $fromSql . $whereSql
+    . ' ORDER BY o.received_at ASC,o.id ASC LIMIT ' . $pageSize . ' OFFSET ' . $offset;
+$stmt = db()->prepare($sql);
+$stmt->execute($params);
+$queue = $stmt->fetchAll();
+$stats = db()->query("SELECT
+    COUNT(*) AS active_total,
+    COALESCE(SUM(o.status='requested'),0) AS dropoff_pending,
+    COALESCE(SUM(o.status='ready'),0) AS ready_total,
+    COALESCE(SUM(o.status='ready' AND pr.requested_at IS NOT NULL AND pr.confirmed_at IS NULL),0) AS handoff_pending
+    FROM laundry__orders_tbl o
+    LEFT JOIN laundry__pickup_requests_tbl pr ON pr.order_id=o.id
+    WHERE o.status NOT IN ('picked_up','cancelled')")->fetch();
+$linkQuery = ['q'=>$search, 'status'=>$statusFilter];
+?>
+<div class="page-heading">
+    <div><p class="eyebrow">STAFF WORK QUEUE</p><h1>จัดการออร์เดอร์ที่ยังไม่เสร็จ</h1>
+      <p>เรียงรายการที่เข้ามาก่อนขึ้นบนสุด เพื่อจัดการงานค้างตามลำดับ</p></div>
+    <a class="btn btn-light" href="<?= e(url('orders')) ?>">ดูรายการซักทั้งหมด</a>
+</div>
+<div class="queue-stats" aria-label="สรุปงานที่ต้องดำเนินการ">
+  <div class="queue-stat"><span>งานที่ยังไม่เสร็จ</span><strong><?= (int)$stats['active_total'] ?></strong></div>
+  <div class="queue-stat"><span>รอลูกค้านำผ้ามาส่ง</span><strong><?= (int)$stats['dropoff_pending'] ?></strong></div>
+  <div class="queue-stat"><span>ผ้าพร้อมรับ</span><strong><?= (int)$stats['ready_total'] ?></strong></div>
+  <div class="queue-stat queue-stat-attention"><span>รอยืนยันส่งมอบ</span><strong><?= (int)$stats['handoff_pending'] ?></strong></div>
+</div>
+<section class="panel">
+  <form method="get" action="index.php" class="filter-bar">
+    <input type="hidden" name="page" value="manage-orders">
+    <label class="filter-search">ค้นหาเลขออร์เดอร์หรือชื่อลูกค้า
+      <input type="search" name="q" maxlength="100" value="<?= e($search) ?>" placeholder="หมายเลขออร์เดอร์ / ชื่อ">
+    </label>
+    <label>สถานะงาน
+      <select name="status">
+        <option value="">งานค้างทั้งหมด</option>
+        <?php foreach (['requested','received','washing','drying','ready'] as $item): ?>
+          <option value="<?= e($item) ?>" <?= $statusFilter === $item ? 'selected' : '' ?>><?= e(status_label($item)) ?></option>
+        <?php endforeach; ?>
+        <option value="pickup-pending" <?= $statusFilter === 'pickup-pending' ? 'selected' : '' ?>>ลูกค้าขอรับผ้าแล้ว</option>
+      </select>
+    </label>
+    <button class="btn btn-primary" type="submit">ค้นหางาน</button>
+    <?php if ($search !== '' || $statusFilter !== ''): ?>
+      <a class="btn btn-light" href="<?= e(url('manage-orders')) ?>">ล้างตัวกรอง</a>
+    <?php endif; ?>
+  </form>
+  <p class="queue-sort-note">เรียงจาก <strong>ออร์เดอร์เก่าที่สุด → ใหม่ที่สุด</strong> | พบ <?= $total ?> รายการ (หน้า <?= $pageNumber ?>/<?= $pages ?>)</p>
+  <div class="queue-list">
+    <?php foreach ($queue as $order): ?>
+      <article class="queue-order">
+        <div class="queue-order-main">
+          <div class="queue-order-heading">
+            <h2><?= e($order['order_no']) ?></h2>
+            <span class="status <?= e(status_class($order['status'])) ?>"><?= e(status_label($order['status'])) ?></span>
+          </div>
+          <p><strong>ลูกค้า:</strong> <?= e($order['full_name']) ?></p>
+          <div class="queue-order-meta">
+            <span>รับรายการ: <?= e(date('d/m/Y H:i', strtotime($order['received_at']))) ?></span>
+            <span>กำหนดรับ: <?= e(date('d/m/Y H:i', strtotime($order['due_at']))) ?></span>
+            <span>ค่าบริการ: ฿<?= money($order['total_amount']) ?></span>
+          </div>
+          <?php if ($order['status'] === 'ready' && $order['pickup_requested_at']): ?>
+            <p class="queue-pickup-alert">● ลูกค้าแจ้งขอรับผ้าแล้ว รอพนักงานตรวจสอบและยืนยันส่งมอบ</p>
+          <?php elseif ($order['status'] === 'requested'): ?>
+            <p class="queue-order-note">รอตรวจรับผ้าจริงก่อนเริ่มกระบวนการซัก</p>
+          <?php endif; ?>
+        </div>
+        <a class="btn btn-primary" href="<?= e(url('order', ['id'=>(int)$order['id']])) ?>">เปิดเพื่อจัดการ</a>
+      </article>
+    <?php endforeach; ?>
+    <?php if (!$queue): ?>
+      <div class="empty-state"><h2>ไม่พบงานค้างตามเงื่อนไข</h2><p>ลองเปลี่ยนตัวกรอง หรือกลับไปดูประวัติรายการซักทั้งหมด</p></div>
+    <?php endif; ?>
+  </div>
+  <?php if ($pages > 1): ?>
+    <nav class="queue-pages" aria-label="หน้าของรายการงานค้าง">
+      <?php if ($pageNumber > 1): ?>
+        <a class="btn btn-light" href="<?= e(url('manage-orders', array_merge($linkQuery,['p'=>$pageNumber-1]))) ?>">← ก่อนหน้า</a>
+      <?php endif; ?>
+      <span>หน้า <?= $pageNumber ?> จาก <?= $pages ?></span>
+      <?php if ($pageNumber < $pages): ?>
+        <a class="btn btn-light" href="<?= e(url('manage-orders', array_merge($linkQuery,['p'=>$pageNumber+1]))) ?>">ถัดไป →</a>
+      <?php endif; ?>
+    </nav>
+  <?php endif; ?>
+</section>

@@ -92,8 +92,45 @@ function go(string $page, array $query = []): never {
     header('Location: ' . url($page, $query), true, 303);
     exit;
 }
+/**
+ * Revalidate every browser session against the live account record.
+ * A password change or account deletion invalidates every older browser,
+ * including sessions on other devices. No schema migration is required.
+ */
 function current_user(): ?array {
-    return $_SESSION['user'] ?? null;
+    // CLI integration tests use synthetic in-memory users; HTTP always verifies MySQL.
+    if (PHP_SAPI === 'cli') return $_SESSION['user'] ?? null;
+    static $checked = false;
+    static $resolved = null;
+    if ($checked) return $resolved;
+    $checked = true;
+    $session = $_SESSION['user'] ?? null;
+    $proof = $_SESSION['auth_fingerprint'] ?? null;
+    $id = is_array($session) ? filter_var($session['id'] ?? null, FILTER_VALIDATE_INT) : false;
+    if ($id === false || $id <= 0 || !is_string($proof) || strlen($proof) !== 64) {
+        if (is_array($session)) unset($_SESSION['user'], $_SESSION['auth_fingerprint']);
+        return null;
+    }
+    $stmt = db()->prepare('SELECT id, full_name, email, role, password_hash FROM laundry__users_tbl WHERE id=? LIMIT 1');
+    $stmt->execute([(int)$id]);
+    $live = $stmt->fetch();
+    if (!$live || $live['email'] === null
+        || !in_array($live['role'], ['admin', 'customer'], true)
+        || !hash_equals((string)($session['role'] ?? ''), (string)$live['role'])
+        || !hash_equals(hash('sha256', (string)$live['password_hash']), $proof)) {
+        // Invalidated sessions lose both privileges and stale private state.
+        $_SESSION = [];
+        session_regenerate_id(true);
+        $_SESSION['csrf'] = bin2hex(random_bytes(32));
+        return null;
+    }
+    $resolved = [
+        'id' => (int)$live['id'],
+        'full_name' => (string)$live['full_name'],
+        'email' => (string)$live['email'],
+        'role' => (string)$live['role'],
+    ];
+    return $resolved;
 }
 function require_login(): void {
     if (!current_user()) go('login');
