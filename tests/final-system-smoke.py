@@ -139,6 +139,10 @@ def sign_up_and_login(email, password):
 guest = Browser()
 code, url, page = guest.get("home")
 ok(code == 200 and "LaundryTrack" in page, "public homepage available")
+ok('class="usage-steps"' in page and "พนักงานยืนยันส่งมอบจริง" in page,
+   "public homepage explains the three-step guest laundry journey")
+ok('href="#main-content"' in page and 'id="main-content"' in page,
+   "skip-to-content link and target are included")
 code, url, page = guest.get("progress")
 ok(code == 200 and "page=login" in url, "unauthenticated member progress redirects to login")
 code, url, page = guest.request("", {
@@ -179,6 +183,16 @@ code, url, page = admin.post({
     "action": "login", "email": "staff@example.test", "password": "ci-admin-passphrase",
 }, "login")
 ok(code == 200 and "page=dashboard" in url, "admin login accepted")
+ok('data-mobile-menu' in page and 'aria-expanded="false"' in page
+   and 'data-mobile-close' in page and 'data-mobile-backdrop' in page,
+   "authenticated admin can access mobile navigation controls")
+code, url, page = admin.get("orders")
+ok(code == 200 and 'class="orders-mobile-table"' in page,
+   "order listing includes responsive mobile table/card structure")
+ok('data-label="หมายเลขออร์เดอร์"' in page
+   and 'data-label="รายละเอียด"' in page,
+   "order listing includes visible mobile field labels")
+ok('aria-current="page"' in page, "active navigation link is marked for accessibility")
 
 code, url, page = admin.post({
     "action": "order-status", "id": str(guest_order), "status": "washing",
@@ -284,6 +298,8 @@ member_id = int(parse_qs(urlparse(url).query)["id"][0])
 ok(status(member_id) == "requested", "member new order starts in requested")
 code, url, page = member_a.get("progress")
 ok(code == 200 and "data-progress-order" in page, "member progress shows own active order")
+ok('data-mobile-menu' in page and 'id="site-navigation"' in page,
+   "member portal also provides mobile drawer navigation")
 code, url, page = member_b.get("order", id=str(member_id))
 ok(code == 404, "other customer cannot read order details")
 code, url, page = member_a.get("notifications-feed")

@@ -1,4 +1,84 @@
 'use strict';
+
+// Mobile navigation: accessible drawer with Esc, backdrop and keyboard support.
+// Without JavaScript, the original horizontal navigation remains available.
+(() => {
+  const drawer = document.getElementById('site-navigation');
+  const toggle = document.querySelector('[data-mobile-menu]');
+  const closeButton = document.querySelector('[data-mobile-close]');
+  const backdrop = document.querySelector('[data-mobile-backdrop]');
+  const content = document.querySelector('.content-area');
+  if (!drawer || !toggle || !closeButton || !backdrop || !content) return;
+
+  const mobile = window.matchMedia('(max-width: 780px)');
+  let opened = false;
+  document.documentElement.classList.add('mobile-menu-ready');
+
+  function updateNavigation() {
+    const showDrawer = mobile.matches && opened;
+    document.body.classList.toggle('mobile-nav-open', showDrawer);
+    toggle.setAttribute('aria-expanded', String(showDrawer));
+    toggle.setAttribute('aria-label', showDrawer ? 'ปิดเมนูนำทาง' : 'เปิดเมนูนำทาง');
+    backdrop.hidden = !showDrawer;
+    // Keep keyboard and assistive-technology focus inside the open drawer.
+    content.inert = showDrawer;
+    if (mobile.matches && !showDrawer) {
+      drawer.setAttribute('inert', '');
+      drawer.setAttribute('aria-hidden', 'true');
+    } else {
+      drawer.removeAttribute('inert');
+      drawer.removeAttribute('aria-hidden');
+    }
+  }
+
+  function closeNavigation(restoreFocus = true) {
+    if (!opened) return;
+    opened = false;
+    updateNavigation();
+    if (restoreFocus && mobile.matches) toggle.focus();
+  }
+
+  toggle.addEventListener('click', () => {
+    opened = !opened;
+    updateNavigation();
+    if (opened) closeButton.focus();
+  });
+  closeButton.addEventListener('click', () => closeNavigation());
+  backdrop.addEventListener('click', () => closeNavigation());
+  drawer.querySelectorAll('.nav-item').forEach(link => {
+    link.addEventListener('click', () => closeNavigation(false));
+  });
+
+  document.addEventListener('keydown', event => {
+    if (!opened || !mobile.matches) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeNavigation();
+    } else if (event.key === 'Tab') {
+      const nodes = Array.from(drawer.querySelectorAll('a[href], button:not([disabled])'))
+        .filter(node => node.getClientRects().length);
+      if (!nodes.length) return;
+      const first = nodes[0];
+      const last = nodes[nodes.length - 1];
+      if (event.shiftKey && (document.activeElement === first || !drawer.contains(document.activeElement))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || !drawer.contains(document.activeElement))) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+  });
+
+  const onResize = () => {
+    if (!mobile.matches) opened = false;
+    updateNavigation();
+  };
+  if (mobile.addEventListener) mobile.addEventListener('change', onResize);
+  else mobile.addListener(onResize);
+  updateNavigation();
+})();
+
 (() => {
   const wrap = document.getElementById('order-items');
   const add = document.getElementById('add-order-item');
@@ -26,6 +106,7 @@
     next.querySelector('.quantity-input').value = '1';
     wrap.appendChild(next);
     update();
+    next.querySelector('.service-select').focus();
   });
   wrap.addEventListener('input', update);
   wrap.addEventListener('change', update);
