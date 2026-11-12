@@ -13,6 +13,7 @@ $guestOrder = current_user() ? null : guest_tracking_order();
     <h1>ติดตามสถานะแบบอัตโนมัติ</h1>
     <p>หน้าเว็บจะตรวจสอบสถานะออร์เดอร์นี้ทุก 30 วินาที ขณะเปิดแท็บอยู่</p>
 </div></div>
+<p class="form-help" role="note">เมื่อสถานะแสดงว่า “พร้อมรับผ้า” ให้แจ้งความประสงค์รับผ้าผ่านหน้านี้ จากนั้นพนักงานต้องตรวจสอบและยืนยันการส่งมอบที่ร้านก่อนสถานะจะเปลี่ยนเป็น “รับผ้าคืนแล้ว”</p>
 <div class="guest-tracking-grid">
     <section class="panel guest-tracking-card"
         id="guest-track-panel" data-feed="<?= e(url('track-feed')) ?>"
