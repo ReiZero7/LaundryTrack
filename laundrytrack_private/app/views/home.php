@@ -1,3 +1,4 @@
+<?php if (($_GET['account_removed'] ?? '') === '1'): ?><div class="alert" role="status">ลบบัญชีเรียบร้อยแล้ว ไม่สามารถเข้าสู่ระบบด้วยบัญชีเดิมได้อีก</div><?php endif; ?>
 <section class="hero">
     <div class="hero-content"><p class="eyebrow">LAUNDRY MANAGEMENT MADE SIMPLE</p><h1>จัดการร้านซักรีด<br><span>เป็นระบบ ง่ายทุกขั้นตอน</span></h1><p>บันทึกรับผ้า ติดตามสถานะ และดูประวัติรายการผ่านเว็บไซต์เดียว</p><div class="hero-actions"><a class="btn btn-primary" href="<?= e(url('order-start')) ?>">สแกน QR / สร้างออร์เดอร์ →</a><a class="btn btn-light" href="<?= e(url('login')) ?>">เข้าสู่ระบบ</a><a class="btn btn-light" href="<?= e(url('register')) ?>">สมัครสมาชิก</a></div></div>
     <div class="hero-graphic"><div class="graphic-ring"></div><span>✳</span><strong>LaundryTrack</strong><small>YOUR LAUNDRY, TRACKED.</small></div>
