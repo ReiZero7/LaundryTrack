@@ -64,23 +64,23 @@ $stats = db()->query("SELECT
 $linkQuery = ['q'=>$search, 'status'=>$statusFilter];
 ?>
 <div class="page-heading">
-    <div><p class="eyebrow">STAFF WORK QUEUE</p><h1>จัดการออร์เดอร์ที่ยังไม่เสร็จ</h1>
-      <p>เรียงรายการที่เข้ามาก่อนขึ้นบนสุด เพื่อจัดการงานค้างตามลำดับ</p></div>
-    <a class="btn btn-light" href="<?= e(url('orders')) ?>">ดูรายการซักทั้งหมด</a>
+    <div><p class="eyebrow">📋 งานวันนี้</p><h1>งานค้าง</h1>
+      <p>งานเก่าขึ้นก่อน</p></div>
+    <a class="btn btn-light" href="<?= e(url('orders')) ?>">🧾 ทุกออร์เดอร์</a>
 </div>
 <div class="queue-stats" aria-label="สรุปงานที่ต้องดำเนินการ">
-  <div class="queue-stat"><span>งานที่ยังไม่เสร็จ</span><strong><?= (int)$stats['active_total'] ?></strong></div>
-  <div class="queue-stat"><span>รอลูกค้านำผ้ามาส่ง</span><strong><?= (int)$stats['dropoff_pending'] ?></strong></div>
-  <div class="queue-stat"><span>ผ้าพร้อมรับ</span><strong><?= (int)$stats['ready_total'] ?></strong></div>
-  <div class="queue-stat queue-stat-attention"><span>รอยืนยันส่งมอบ</span><strong><?= (int)$stats['handoff_pending'] ?></strong></div>
+  <div class="queue-stat"><span>📋 งานค้าง</span><strong><?= (int)$stats['active_total'] ?></strong></div>
+  <div class="queue-stat"><span>🧺 รอรับผ้า</span><strong><?= (int)$stats['dropoff_pending'] ?></strong></div>
+  <div class="queue-stat"><span>✅ พร้อมรับ</span><strong><?= (int)$stats['ready_total'] ?></strong></div>
+  <div class="queue-stat queue-stat-attention"><span>🤝 รอส่งมอบ</span><strong><?= (int)$stats['handoff_pending'] ?></strong></div>
 </div>
 <section class="panel">
   <form method="get" action="index.php" class="filter-bar">
     <input type="hidden" name="page" value="manage-orders">
-    <label class="filter-search">ค้นหาเลขออร์เดอร์หรือชื่อลูกค้า
+    <label class="filter-search">🔍 ค้นหา
       <input type="search" name="q" maxlength="100" value="<?= e($search) ?>" placeholder="หมายเลขออร์เดอร์ / ชื่อ">
     </label>
-    <label>สถานะงาน
+    <label>สถานะ
       <select name="status">
         <option value="">งานค้างทั้งหมด</option>
         <?php foreach (['requested','received','washing','drying','ready'] as $item): ?>
@@ -89,12 +89,12 @@ $linkQuery = ['q'=>$search, 'status'=>$statusFilter];
         <option value="pickup-pending" <?= $statusFilter === 'pickup-pending' ? 'selected' : '' ?>>ลูกค้าขอรับผ้าแล้ว</option>
       </select>
     </label>
-    <button class="btn btn-primary" type="submit">ค้นหางาน</button>
+    <button class="btn btn-primary" type="submit">ค้นหา</button>
     <?php if ($search !== '' || $statusFilter !== ''): ?>
-      <a class="btn btn-light" href="<?= e(url('manage-orders')) ?>">ล้างตัวกรอง</a>
+      <a class="btn btn-light" href="<?= e(url('manage-orders')) ?>">ล้าง</a>
     <?php endif; ?>
   </form>
-  <p class="queue-sort-note">เรียงจาก <strong>ออร์เดอร์เก่าที่สุด → ใหม่ที่สุด</strong> | พบ <?= $total ?> รายการ (หน้า <?= $pageNumber ?>/<?= $pages ?>)</p>
+  <p class="queue-sort-note">⏳ เก่าก่อน · <?= $total ?> งาน · หน้า <?= $pageNumber ?>/<?= $pages ?></p>
   <div class="queue-list">
     <?php foreach ($queue as $order): ?>
       <article class="queue-order">
@@ -103,25 +103,25 @@ $linkQuery = ['q'=>$search, 'status'=>$statusFilter];
             <h2><?= e($order['order_no']) ?></h2>
             <span class="status <?= e(status_class($order['status'])) ?>"><?= e(status_label($order['status'])) ?></span>
           </div>
-          <p><strong>ลูกค้า:</strong> <?= e($order['full_name']) ?></p>
+          <p>👤 <?= e($order['full_name']) ?></p>
           <div class="queue-order-meta">
-            <span>รับรายการ: <?= e(date('d/m/Y H:i', strtotime($order['received_at']))) ?></span>
-            <span>กำหนดรับ: <?= e(date('d/m/Y H:i', strtotime($order['due_at']))) ?></span>
-            <span>ค่าบริการ: ฿<?= money($order['total_amount']) ?></span>
+            <span>📅 รับ <?= e(date('d/m/Y H:i', strtotime($order['received_at']))) ?></span>
+            <span>⏰ รับคืน <?= e(date('d/m/Y H:i', strtotime($order['due_at']))) ?></span>
+            <span>💰 ฿<?= money($order['total_amount']) ?></span>
             <?php $work = $serviceProgressByOrder[(int)$order['id']] ?? ['total'=>0,'completed'=>0]; ?>
-            <span class="queue-service-count">บริการเสร็จ <?= (int)$work['completed'] ?>/<?= (int)$work['total'] ?></span>
+            <span class="queue-service-count">✅ <?= (int)$work['completed'] ?>/<?= (int)$work['total'] ?> บริการ</span>
           </div>
           <?php if ($order['status'] === 'ready' && $order['pickup_requested_at']): ?>
-            <p class="queue-pickup-alert">● ลูกค้าแจ้งขอรับผ้าแล้ว รอพนักงานตรวจสอบและยืนยันส่งมอบ</p>
+            <p class="queue-pickup-alert">🔔 ลูกค้าขอรับแล้ว · ตรวจผ้าก่อนส่งมอบ</p>
           <?php elseif ($order['status'] === 'requested'): ?>
-            <p class="queue-order-note">รอตรวจรับผ้าจริงก่อนเริ่มกระบวนการซัก</p>
+            <p class="queue-order-note">🧺 รอลูกค้านำผ้ามาส่ง</p>
           <?php endif; ?>
         </div>
-        <a class="btn btn-primary" href="<?= e(url('order', ['id'=>(int)$order['id']])) ?>">เปิดเพื่อจัดการ</a>
+        <a class="btn btn-primary" href="<?= e(url('order', ['id'=>(int)$order['id']])) ?>">จัดการ →</a>
       </article>
     <?php endforeach; ?>
     <?php if (!$queue): ?>
-      <div class="empty-state"><h2>ไม่พบงานค้างตามเงื่อนไข</h2><p>ลองเปลี่ยนตัวกรอง หรือกลับไปดูประวัติรายการซักทั้งหมด</p></div>
+      <div class="empty-state"><h2>ไม่พบงานค้างตามเงื่อนไข</h2><p>ลองเปลี่ยนตัวกรอง</p></div>
     <?php endif; ?>
   </div>
   <?php if ($pages > 1): ?>
