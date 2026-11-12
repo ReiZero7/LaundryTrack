@@ -105,8 +105,8 @@ function process_action(): never {
                 require_login();
                 $me = current_user();
                 $currentPassword = is_string($_POST['current_password'] ?? null) ? $_POST['current_password'] : '';
-                if (post_string('delete_confirmation') !== 'DELETE' || strlen($currentPassword) > 4096) {
-                    flash('กรุณาพิมพ์ DELETE และกรอกรหัสผ่านปัจจุบันเพื่อยืนยัน', 'error');
+                if ($currentPassword === '' || strlen($currentPassword) > 4096) {
+                    flash('กรุณากรอกรหัสผ่านปัจจุบันเพื่อยืนยันการลบบัญชี', 'error');
                     go('account');
                 }
                 $pdo = db();
@@ -647,6 +647,48 @@ function process_action(): never {
                     if ($e instanceof DomainException) { flash('ไม่สามารถปิดออร์เดอร์ได้ ต้องมีคำขอรับผ้าและยังไม่ถูกส่งมอบ', 'error'); go('order', ['id' => $orderId]); }
                     throw $e;
                 }
+            case 'order-item-work':
+                require_admin();
+                $orderId = post_int('id');
+                $itemId = post_int('item_id');
+                $markDone = post_string('completed') === 'yes';
+                if ($orderId < 1 || $itemId < 1) {
+                    flash('ไม่พบรายการบริการที่ต้องการอัปเดต', 'error');
+                    go('manage-orders');
+                }
+                $pdo = db();
+                $pdo->beginTransaction();
+                try {
+                    // Lock parent order; order-status uses the same lock so "ready"
+                    // cannot race with incomplete work item updates.
+                    $stmt = $pdo->prepare('SELECT status FROM laundry__orders_tbl WHERE id=? FOR UPDATE');
+                    $stmt->execute([$orderId]);
+                    $state = $stmt->fetchColumn();
+                    if (!in_array($state, ['received','washing','drying'], true)) {
+                        throw new DomainException('Service work can only be marked while processing');
+                    }
+                    $stmt = $pdo->prepare('SELECT id FROM laundry__order_items_tbl WHERE id=? AND order_id=?');
+                    $stmt->execute([$itemId, $orderId]);
+                    if (!$stmt->fetchColumn()) throw new DomainException('Service not in order');
+                    if ($markDone) {
+                        $stmt = $pdo->prepare('INSERT INTO laundry__order_item_work_tbl(order_item_id,completed_by)
+                            VALUES(?,?) ON DUPLICATE KEY UPDATE order_item_id=order_item_id');
+                        $stmt->execute([$itemId, (int)current_user()['id']]);
+                    } else {
+                        $stmt = $pdo->prepare('DELETE FROM laundry__order_item_work_tbl WHERE order_item_id=?');
+                        $stmt->execute([$itemId]);
+                    }
+                    $pdo->commit();
+                    flash($markDone ? 'บันทึกว่าบริการนี้เสร็จแล้ว' : 'นำบริการนี้กลับไปเป็นงานที่ยังไม่เสร็จ');
+                    go('order', ['id'=>$orderId]);
+                } catch (Throwable $e) {
+                    if ($pdo->inTransaction()) $pdo->rollBack();
+                    if ($e instanceof DomainException) {
+                        flash('เปลี่ยนสถานะงานบริการไม่ได้ กรุณาตรวจสอบออร์เดอร์', 'error');
+                        go('order', ['id'=>$orderId]);
+                    }
+                    throw $e;
+                }
             case 'order-status':
                 require_admin();
                 $orderId = post_int('id');
@@ -674,13 +716,30 @@ function process_action(): never {
                     if ($current === 'requested' && $next === 'received' && post_string('dropoff_confirmed') !== 'yes') {
                         throw new DomainException('Staff must verify physical laundry receipt');
                     }
+                    // An order is not ready while even one ordered service
+                    // (e.g. ironing after washing/drying) is unfinished.
+                    if ($next === 'ready') {
+                        $stmt = $pdo->prepare('SELECT COUNT(*)
+                            FROM laundry__order_items_tbl oi
+                            LEFT JOIN laundry__order_item_work_tbl w ON w.order_item_id=oi.id
+                            WHERE oi.order_id=? AND w.order_item_id IS NULL');
+                        $stmt->execute([$orderId]);
+                        if ((int)$stmt->fetchColumn() !== 0) {
+                            throw new DomainException('Unfinished ordered services');
+                        }
+                    }
                     $pdo->prepare('UPDATE laundry__orders_tbl SET status=? WHERE id=?')->execute([$next, $orderId]);
                     $pdo->prepare('INSERT INTO laundry__status_history_tbl(order_id,changed_by,old_status,new_status) VALUES(?,?,?,?)')->execute([$orderId, current_user()['id'], $current, $next]);
                     $pdo->commit();
                     flash('อัปเดตสถานะเรียบร้อย'); go('order', ['id' => $orderId]);
                 } catch (Throwable $e) {
                     if ($pdo->inTransaction()) $pdo->rollBack();
-                    if ($e instanceof DomainException) { flash('ไม่สามารถเปลี่ยนสถานะตามขั้นตอนที่เลือกได้', 'error'); go('orders'); }
+                    if ($e instanceof DomainException) {
+                        flash($e->getMessage() === 'Unfinished ordered services'
+                            ? 'ยังมีบริการที่ทำไม่เสร็จ กรุณาตรวจสอบและทำให้ครบทุกรายการก่อนเปลี่ยนเป็นพร้อมรับผ้า'
+                            : 'ไม่สามารถเปลี่ยนสถานะตามขั้นตอนที่เลือกได้', 'error');
+                        go('order', ['id'=>$orderId]);
+                    }
                     throw $e;
                 }
             default:
