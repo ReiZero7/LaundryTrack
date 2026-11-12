@@ -4,7 +4,7 @@ $services = db()->query('SELECT id,name,unit,price FROM laundry__services_tbl WH
 $defaultDue = date('Y-m-d\TH:i', strtotime('+2 days'));
 ?>
 <div class="page-heading"><div><p class="eyebrow">NEW LAUNDRY ORDER</p><h1>สร้างรายการรับผ้า</h1><p>รองรับลูกค้าสมาชิกและลูกค้าหน้าร้านที่ไม่มีอีเมล</p></div><a class="btn btn-light" href="<?= e(url('orders')) ?>">← รายการทั้งหมด</a></div>
-<section class="panel order-form-panel"><form method="post" action="index.php" id="new-order-form" class="form-stack"><?= csrf_field() ?><input type="hidden" name="action" value="order-create"><div class="form-grid"><div class="customer-mode-picker">
+<section class="panel order-form-panel"><form method="post" action="index.php" id="new-order-form" class="form-stack"><?= csrf_field() ?><input type="hidden" name="action" value="order-create"><p class="form-help" role="note">สำหรับพนักงาน: ตรวจสอบว่าร้านได้รับผ้าจริง เลือกลูกค้าหน้าร้านหรือสมาชิกเดิม แล้วเพิ่มบริการพร้อมจำนวนก่อนบันทึก</p><div class="form-grid"><div class="customer-mode-picker">
     <label><input type="radio" name="customer_mode" value="walkin" checked> ลูกค้าหน้าร้าน (ไม่ต้องใช้อีเมล)</label>
     <label><input type="radio" name="customer_mode" value="existing"> สมาชิกเดิม</label>
     <div id="walkin-customer-fields" class="walkin-customer-fields">
