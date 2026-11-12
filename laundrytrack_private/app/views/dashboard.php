@@ -15,7 +15,7 @@ if (!$admin && (int)$stats['ready_count'] > 0) {
     $readyNotifications = $stmt->fetchAll();
 }
 ?>
-<div class="page-heading"><div><p class="eyebrow">OVERVIEW</p><h1>สวัสดี, <?= e(current_user()['full_name']) ?> 👋</h1><p>ภาพรวมรายการซักรีดและความคืบหน้าล่าสุด</p></div><?php if ($admin): ?><div class="dashboard-admin-actions"><a class="btn btn-primary" href="<?= e(url('manage-orders')) ?>">จัดการออร์เดอร์ที่ค้าง</a><a class="btn btn-light" href="<?= e(url('new-order')) ?>">+ สร้างออร์เดอร์</a></div><?php endif; ?></div>
+<div class="page-heading"><div><p class="eyebrow">🏠 ภาพรวม</p><h1>ภาพรวมร้าน</h1><p>สวัสดี <?= e(current_user()['full_name']) ?> 👋</p></div><?php if ($admin): ?><div class="dashboard-admin-actions"><a class="btn btn-primary" href="<?= e(url('manage-orders')) ?>">📋 ดูงานค้าง</a><a class="btn btn-light" href="<?= e(url('new-order')) ?>">➕ สร้างออร์เดอร์</a></div><?php endif; ?></div>
 <?php if (!$admin): ?>
 <section id="pickup-live-notice" class="pickup-notice" role="status" <?= $readyNotifications ? '' : 'hidden' ?>>
     <div class="pickup-notice-title">
@@ -37,14 +37,14 @@ if (!$admin && (int)$stats['ready_count'] > 0) {
 </section>
 <?php endif; ?>
 <div class="metric-grid">
-    <div class="metric-card"><p>ออร์เดอร์ทั้งหมด</p><strong><?= (int)$stats['total'] ?></strong><span>รายการในระบบ</span><div class="metric-icon">▤</div></div>
-    <div class="metric-card"><p>กำลังดำเนินการ</p><strong><?= (int)$stats['processing'] ?></strong><span>รับแล้ว / กำลังซัก / พร้อมรับ</span><div class="metric-icon">↺</div></div>
-    <div class="metric-card"><p>พร้อมรับผ้า</p><strong id="pickup-live-metric"><?= (int)$stats['ready_count'] ?></strong><span>รอลูกค้ามารับ</span><div class="metric-icon">✓</div></div>
-    <div class="metric-card"><p>ยอดค่าบริการรวม</p><strong>฿<?= money($stats['amount']) ?></strong><span>ไม่รวมออร์เดอร์ยกเลิก (ไม่ใช่ยอดเงินรับจริง)</span><div class="metric-icon">฿</div></div>
+    <div class="metric-card"><p>🧾 ออร์เดอร์</p><strong><?= (int)$stats['total'] ?></strong><span>ทั้งหมด</span><div class="metric-icon">▤</div></div>
+    <div class="metric-card"><p>🫧 กำลังทำ</p><strong><?= (int)$stats['processing'] ?></strong><span>งานยังไม่ปิด</span><div class="metric-icon">↺</div></div>
+    <div class="metric-card"><p>✅ พร้อมรับ</p><strong id="pickup-live-metric"><?= (int)$stats['ready_count'] ?></strong><span>รอรับผ้า</span><div class="metric-icon">✓</div></div>
+    <div class="metric-card"><p>💰 รวมค่าบริการ</p><strong>฿<?= money($stats['amount']) ?></strong><span>ไม่ใช่ยอดรับเงินจริง</span><div class="metric-icon">฿</div></div>
 </div>
-<div class="panel"><div class="panel-header"><div><h2>รายการซักรีดล่าสุด</h2><p>ติดตามความคืบหน้าทุกออร์เดอร์ได้ทันที</p></div><a class="text-link" href="<?= e(url($admin ? 'manage-orders' : 'orders')) ?>"><?= $admin ? 'จัดการงานค้าง →' : 'ดูทั้งหมด →' ?></a></div>
-    <div class="table-wrap"><table><thead><tr><th>เลขออร์เดอร์</th><?php if ($admin): ?><th>ลูกค้า</th><?php endif; ?><th>วันที่สร้างรายการ</th><th>ยอดรวม</th><th>สถานะ</th><th></th></tr></thead><tbody>
-        <?php foreach ($recent as $r): ?><tr><td><strong><?= e($r['order_no']) ?></strong></td><?php if ($admin): ?><td><?= e($r['full_name']) ?></td><?php endif; ?><td><?= e(date('d/m/Y', strtotime($r['received_at']))) ?></td><td>฿<?= money($r['total_amount']) ?></td><td><span class="status <?= status_class($r['status']) ?>"><?= e(order_status_label($r['status'], $r['creator_role'])) ?></span></td><td><a class="text-link" href="<?= e(url('order', ['id' => (int)$r['id']])) ?>">รายละเอียด</a></td></tr><?php endforeach; ?>
+<div class="panel"><div class="panel-header"><div><h2>🧺 ออร์เดอร์ล่าสุด</h2></div><a class="text-link" href="<?= e(url($admin ? 'manage-orders' : 'orders')) ?>"><?= $admin ? 'ดูงานค้าง →' : 'ดูทั้งหมด →' ?></a></div>
+    <div class="table-wrap"><table><thead><tr><th>ออร์เดอร์</th><?php if ($admin): ?><th>ลูกค้า</th><?php endif; ?><th>วันที่</th><th>ยอด</th><th>สถานะ</th><th></th></tr></thead><tbody>
+        <?php foreach ($recent as $r): ?><tr><td><strong><?= e($r['order_no']) ?></strong></td><?php if ($admin): ?><td><?= e($r['full_name']) ?></td><?php endif; ?><td><?= e(date('d/m/Y', strtotime($r['received_at']))) ?></td><td>฿<?= money($r['total_amount']) ?></td><td><span class="status <?= status_class($r['status']) ?>"><?= e(order_status_label($r['status'], $r['creator_role'])) ?></span></td><td><a class="text-link" href="<?= e(url('order', ['id' => (int)$r['id']])) ?>">ดู →</a></td></tr><?php endforeach; ?>
         <?php if (!$recent): ?><tr><td colspan="6" class="empty-cell">ยังไม่มีรายการซักรีด</td></tr><?php endif; ?>
     </tbody></table></div>
 </div>
