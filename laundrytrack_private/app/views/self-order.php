@@ -33,13 +33,13 @@ $defaultDue = date('Y-m-d\\TH:i', strtotime('+2 days'));
             <option value="<?= (int)$service['id'] ?>" data-price="<?= e((string)$service['price']) ?>"><?= e($service['name']) ?> (<?= money($service['price']) ?> บาท / <?= e($service['unit']) ?>)</option>
         <?php endforeach; ?>
     </select></label>
-    <label>จำนวน<input name="quantity[]" class="quantity-input" type="number" required min="0.01" max="10000" step="0.01" value="1"></label>
+    <label>จำนวน<input name="quantity[]" class="quantity-input" type="number" required min="0.01" max="10000" step="0.01" value="1" inputmode="decimal"></label>
     <span class="line-total">฿0.00</span>
     <button type="button" class="btn btn-icon remove-row" aria-label="ลบรายการ">×</button>
 </div></div>
 <button type="button" id="add-order-item" class="btn btn-light btn-add">+ เพิ่มบริการ</button>
 <label>หมายเหตุ<textarea name="notes" maxlength="2000" rows="3" placeholder="เช่น รายละเอียดเพิ่มเติมเกี่ยวกับผ้า"></textarea></label>
-<div class="order-totals"><span>ยอดประมาณการ (ระบบตรวจราคาจริงจาก MySQL)</span><strong id="order-total">฿0.00</strong></div>
+<div class="order-totals"><span>ยอดประมาณการ (ระบบตรวจราคาจริงจาก MySQL)</span><strong id="order-total" role="status" aria-live="polite" aria-atomic="true">฿0.00</strong></div>
 <p class="muted">การสร้างออร์เดอร์เป็นการแจ้งรายการล่วงหน้า กรุณานำผ้ามาส่งให้ร้านตรวจรับจริงก่อนเริ่มซัก</p>
 <button class="btn btn-primary" type="submit" <?= !$services ? 'disabled' : '' ?>>ยืนยันสร้างออร์เดอร์</button>
 <?php if (!$services): ?><p class="muted">ขณะนี้ยังไม่มีบริการที่เปิดใช้งาน</p><?php endif; ?>
