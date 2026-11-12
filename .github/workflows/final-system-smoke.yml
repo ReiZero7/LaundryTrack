@@ -54,6 +54,8 @@ jobs:
             < laundrytrack_private/migrations/2026-11-11_order_rate_limiting.sql
           MYSQL_PWD=ci-local-only mysql -h 127.0.0.1 -P 3306 -u root laundrytrack_ci \
             < laundrytrack_private/migrations/2026-11-11_staff_verified_pickup.sql
+          MYSQL_PWD=ci-local-only mysql -h 127.0.0.1 -P 3306 -u root laundrytrack_ci \
+            < laundrytrack_private/migrations/2026-11-12_order_item_progress.sql
       - name: Add disposable admin account with password hash
         shell: bash
         run: |
