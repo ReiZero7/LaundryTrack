@@ -143,6 +143,12 @@ ok('class="usage-steps"' in page and "พนักงานยืนยันส
    "public homepage explains the three-step guest laundry journey")
 ok('href="#main-content"' in page and 'id="main-content"' in page,
    "skip-to-content link and target are included")
+code, url, page = guest.get("order-start")
+ok(code == 200 and 'Member' in page and 'Guest' in page
+   and page.count('class="panel self-start-card order-start-choice"') == 2,
+   "public Order Start offers only Member and Guest choices")
+code, url, page = guest.get("shop-qr")
+ok("page=login" in url, "anonymous visitors cannot open the store QR management page")
 code, url, page = guest.get("progress")
 ok(code == 200 and "page=login" in url, "unauthenticated member progress redirects to login")
 code, url, page = guest.request("", {
@@ -183,6 +189,20 @@ code, url, page = admin.post({
     "action": "login", "email": "staff@example.test", "password": "ci-admin-passphrase",
 }, "login")
 ok(code == 200 and "page=dashboard" in url, "admin login accepted")
+ok('id="order-qr-code"' not in page and 'self-service-shop-panel' not in page,
+   "admin Dashboard has no QR code or shop ordering link")
+code, url, page = admin.get("shop-qr")
+ok(code == 200 and 'id="order-qr-code"' in page
+   and 'id="order-tracking-url"' in page
+   and 'page=order-start' in page,
+   "QR and link moved into a dedicated Admin-only page")
+ok('class="sidebar-profile account-profile-link"' in page
+   and 'บัญชีของฉัน</a>' not in page,
+   "account settings accessible from profile name rather than nav tab")
+code, url, page = admin.get("order", id=str(guest_order))
+ok(code == 200 and 'id="order-qr-tools"' in page
+   and page.find('<h2>ติดตามสถานะ</h2>') < page.find('id="order-qr-tools"'),
+   "guest order keeps Member-style details and timeline together, with QR below")
 ok('data-mobile-menu' in page and 'aria-expanded="false"' in page
    and 'data-mobile-close' in page and 'data-mobile-backdrop' in page,
    "authenticated admin can access mobile navigation controls")
@@ -418,6 +438,8 @@ code, url, page = Browser().get("account")
 ok("page=login" in url, "anonymous visitors cannot open account settings")
 code, url, page = member_a.get("manage-orders")
 ok(code == 403, "Member is forbidden from Admin work queue")
+code, url, page = member_a.get("shop-qr")
+ok(code == 403, "Member cannot access staff store QR management")
 
 # Changing password requires old password and matching confirmation.
 code, url, page = member_a.post({

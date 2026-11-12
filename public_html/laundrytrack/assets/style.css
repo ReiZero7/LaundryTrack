@@ -368,3 +368,90 @@ body{background:radial-gradient(circle at 92% 14%,#d5f3fa 0,transparent 30%),rad
   .queue-stat{padding:12px}
   .queue-stat strong{font-size:23px}
 }
+
+
+/* PR #15 — compact confirmation checks and simplified account/QR navigation. */
+.account-profile-link{
+  text-decoration:none;display:flex;align-items:center;gap:10px;cursor:pointer;
+  border-radius:13px;padding:17px 8px 12px;transition:background .18s;
+}
+.account-profile-link:hover{background:#ffffff16}
+.account-profile-link:focus-visible{outline:3px solid #7edff0;outline-offset:2px}
+.account-profile-text{display:block;min-width:0;flex:1}
+.account-profile-link .account-profile-text strong{
+  max-width:100%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis
+}
+.account-profile-link .account-profile-text small{
+  color:#afd6e3;font-weight:650;line-height:1.4
+}
+.account-profile-arrow{color:#bdebf3;font-weight:800;font-size:25px;line-height:1}
+
+/* Keep the required confirmation control visibly small, while the entire label
+   remains an easy touch/click target. Overrides the default full-width form input. */
+.form-stack .dropoff-confirm-check{
+  display:flex!important;align-items:center;gap:11px;
+  padding:12px 14px;min-height:48px;border:1px solid #cbe7df;
+  border-radius:12px;background:#f3fbf8;color:#255e54;
+  font-size:13px;line-height:1.6;font-weight:650;cursor:pointer
+}
+.form-stack .dropoff-confirm-check input[type="checkbox"]{
+  appearance:auto;display:block;flex:0 0 17px;
+  width:17px!important;height:17px!important;
+  min-width:17px!important;max-width:17px!important;
+  min-height:17px!important;max-height:17px!important;
+  margin:0;padding:0!important;accent-color:#087f72;
+  border-radius:4px;box-shadow:none
+}
+.form-stack .dropoff-confirm-check:has(input:checked){
+  border-color:#85d2b5;background:#e6f7ee
+}
+.form-stack .dropoff-confirm-check:focus-within{
+  outline:2px solid #188c87;outline-offset:3px
+}
+
+/* Admin shop QR and link now have their own page (not Dashboard). */
+.shop-qr-page{max-width:1080px}
+.shop-qr-layout{display:grid;grid-template-columns:minmax(240px,.75fr) minmax(0,1.25fr);
+  gap:25px;align-items:start}
+.shop-qr-preview.walkin-qr-output{margin:0;justify-items:center;padding:24px;
+  min-height:260px;display:grid;place-items:center;background:#f1fbff;
+  border:1px solid #cae7f1}
+.shop-qr-preview #order-qr-code{box-shadow:0 5px 20px #114c6618}
+.shop-qr-instructions{min-width:0}
+.shop-qr-instructions h3{font-size:19px;color:#194f67;margin:0 0 9px}
+.shop-qr-instructions p{color:#527080;margin:0 0 17px}
+.shop-qr-link-label{display:grid;gap:8px;font-weight:700;color:#365e6e;font-size:13px}
+.shop-qr-link-label input{width:100%;min-width:0;background:#f8fcff;
+  border:1px solid #c8e3f0;border-radius:10px;padding:12px;
+  color:#204b63;font:inherit;font-size:14px}
+.shop-qr-link-label input:focus-visible{outline:3px solid #158bac;outline-offset:2px}
+.shop-qr-actions{display:flex;flex-wrap:wrap;gap:10px;margin:17px 0}
+.order-qr-below{margin-top:20px}
+.order-qr-below .walkin-qr-panel{max-width:none}
+.order-heading-actions{display:flex;flex-wrap:wrap;gap:9px;justify-content:flex-end}
+.order-start-choices{max-width:950px;margin:0 auto}
+.order-start-choices .order-start-choice{border-radius:20px;min-width:0}
+.order-start-choice h2{font-size:24px;color:#1d5873;margin:0}
+.order-start-choice p{font-size:14px;line-height:1.8}
+.order-start-choice .btn{min-height:48px}
+@media (max-width:780px){
+  .account-profile-link{min-height:58px;padding:12px 8px}
+  .shop-qr-layout{grid-template-columns:1fr}
+  .shop-qr-preview.walkin-qr-output{min-height:245px;padding:14px}
+  .shop-qr-actions .btn{flex:1 1 100%;white-space:normal}
+  .order-heading-actions{width:100%;justify-content:flex-start}
+  .order-heading-actions .btn{flex:1 1 140px;white-space:normal}
+  .form-stack .dropoff-confirm-check{padding:12px}
+  .order-start-choices .order-start-choice{padding:21px}
+}
+@media (prefers-reduced-motion:reduce){
+  .account-profile-link{transition:none}
+}
+
+
+.topbar-account-link{display:inline-block;max-width:min(50vw,310px);
+  color:inherit;text-decoration:none;white-space:nowrap;text-overflow:ellipsis;
+  overflow:hidden;vertical-align:bottom;border-radius:4px}
+.topbar-account-link:hover{text-decoration:underline;color:#087fae}
+.topbar-account-link:focus-visible{outline:2px solid #087fae;outline-offset:3px}
+@media(max-width:600px){.topbar-account-link{max-width:35vw}}

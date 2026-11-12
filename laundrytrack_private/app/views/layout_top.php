@@ -7,12 +7,11 @@ $nav = is_admin() ? [
     ['new-order', 'สร้างออร์เดอร์', '+'],
     ['services', 'บริการและราคา', '◈'],
     ['customers', 'ลูกค้า', '♙'],
-    ['account', 'บัญชีของฉัน', '⚙'],
+    ['shop-qr', 'QR และลิงก์ร้าน', '▣'],
 ] : [
     ['progress', 'ความคืบหน้าการซักรีด', '◉'],
     ['orders', 'ประวัติรายการ', '▤'],
     ['self-order', 'สร้างออร์เดอร์', '+'],
-    ['account', 'บัญชีของฉัน', '⚙'],
 ];
 $readyAlertCount = 0;
 if ($user && !is_admin()) {
@@ -45,12 +44,12 @@ $flashMessage = take_flash();
             <a class="nav-item <?= $page === $dest ? 'active' : '' ?>" href="<?= e(url($dest)) ?>" <?= $page === $dest ? 'aria-current="page"' : '' ?>><span class="nav-glyph"><?= e($glyph) ?></span><?= e($label) ?></a>
             <?php endforeach; ?>
         </nav>
-        <div class="sidebar-profile"><span class="avatar"><?= e(mb_substr_safe($user['full_name'], 0, 1)) ?></span><div><strong><?= e($user['full_name']) ?></strong><small><?= $user['role'] === 'admin' ? 'ผู้ดูแลร้าน' : 'ลูกค้า' ?></small></div></div>
+        <a class="sidebar-profile account-profile-link" href="<?= e(url('account')) ?>" aria-label="ตั้งค่าบัญชีของ <?= e($user['full_name']) ?>"><span class="avatar" aria-hidden="true"><?= e(mb_substr_safe($user['full_name'], 0, 1)) ?></span><span class="account-profile-text"><strong><?= e($user['full_name']) ?></strong><small><?= $user['role'] === 'admin' ? 'ผู้ดูแลร้าน' : 'ลูกค้า' ?> · จัดการบัญชี</small></span><span class="account-profile-arrow" aria-hidden="true">›</span></a>
         <form method="post" action="index.php" class="sidebar-logout"><?= csrf_field() ?><input type="hidden" name="action" value="logout"><button class="btn btn-ghost btn-block" type="submit">ออกจากระบบ</button></form>
     </aside>
     <button class="mobile-nav-backdrop" type="button" data-mobile-backdrop aria-label="ปิดเมนูนำทาง" hidden></button>
 <?php endif; ?>
     <div class="content-area <?= $user ? '' : 'guest-area' ?>">
-        <header class="topbar"><?php if ($user): ?><button class="mobile-menu-toggle" type="button" data-mobile-menu aria-controls="site-navigation" aria-expanded="false" aria-label="เปิดเมนูนำทาง"><span aria-hidden="true">☰</span><span>เมนู</span></button><?php endif; ?><div class="topbar-heading"><span class="topbar-kicker">LAUNDRY MANAGEMENT</span><strong><?= $user ? 'จัดการซักรีดได้ในที่เดียว' : 'LaundryTrack' ?></strong></div><div class="topbar-actions"><?php if ($user && !is_admin()): ?><a id="customer-notifications" class="notification-bell" href="<?= e(url('progress')) ?>" data-feed="<?= e(url('notifications-feed')) ?>" data-count="<?= $readyAlertCount ?>" aria-label="การแจ้งเตือน: มี <?= $readyAlertCount ?> ออร์เดอร์ที่พร้อมรับผ้า">🔔 แจ้งเตือน <span class="notification-count" data-ready-badge <?= $readyAlertCount === 0 ? 'hidden' : '' ?>><?= $readyAlertCount ?></span></a><?php endif; ?><span class="topbar-tag"><?= $user ? ($user['role'] === 'admin' ? 'ADMIN PANEL' : 'CUSTOMER PORTAL') : 'WELCOME' ?></span></div></header>
+        <header class="topbar"><?php if ($user): ?><button class="mobile-menu-toggle" type="button" data-mobile-menu aria-controls="site-navigation" aria-expanded="false" aria-label="เปิดเมนูนำทาง"><span aria-hidden="true">☰</span><span>เมนู</span></button><?php endif; ?><div class="topbar-heading"><span class="topbar-kicker">LAUNDRY MANAGEMENT</span><strong><?php if ($user): ?><a class="topbar-account-link" href="<?= e(url('account')) ?>" title="จัดการบัญชีของฉัน"><?= e($user['full_name']) ?></a><?php else: ?>LaundryTrack<?php endif; ?></strong></div><div class="topbar-actions"><?php if ($user && !is_admin()): ?><a id="customer-notifications" class="notification-bell" href="<?= e(url('progress')) ?>" data-feed="<?= e(url('notifications-feed')) ?>" data-count="<?= $readyAlertCount ?>" aria-label="การแจ้งเตือน: มี <?= $readyAlertCount ?> ออร์เดอร์ที่พร้อมรับผ้า">🔔 แจ้งเตือน <span class="notification-count" data-ready-badge <?= $readyAlertCount === 0 ? 'hidden' : '' ?>><?= $readyAlertCount ?></span></a><?php endif; ?><span class="topbar-tag"><?= $user ? ($user['role'] === 'admin' ? 'ADMIN PANEL' : 'CUSTOMER PORTAL') : 'WELCOME' ?></span></div></header>
         <main class="main-content" id="main-content" tabindex="-1">
         <?php if ($flashMessage): ?><div class="alert <?= $flashMessage['kind'] === 'error' ? 'alert-error' : 'alert-success' ?>" role="status"><?= e($flashMessage['message']) ?></div><?php endif; ?>

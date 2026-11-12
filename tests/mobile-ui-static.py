@@ -16,6 +16,10 @@ self_order = source("laundrytrack_private/app/views/self-order.php")
 new_order = source("laundrytrack_private/app/views/new-order.php")
 details = source("laundrytrack_private/app/views/order.php")
 guest_portal = source("laundrytrack_private/app/views/track-portal.php")
+dashboard = source("laundrytrack_private/app/views/dashboard.php")
+order_start = source("laundrytrack_private/app/views/order-start.php")
+shop_qr = source("laundrytrack_private/app/views/shop-qr.php")
+router = source("public_html/laundrytrack/index.php")
 style = source("public_html/laundrytrack/assets/style.css")
 script = source("public_html/laundrytrack/assets/app.js")
 
@@ -63,6 +67,30 @@ checks = {
         and 'mobile-table-hint' in details,
     "accessibility motion preference remains honored":
         '@media(prefers-reduced-motion:reduce)' in style,
+    "Member and Guest order-start choices are the only two cards":
+        order_start.count('class="panel self-start-card order-start-choice"') == 2
+        and '<h2>Member</h2>' in order_start
+        and '<h2>Guest</h2>' in order_start,
+    "store QR removed from Dashboard and isolated to protected route":
+        'id="order-qr-code"' not in dashboard
+        and 'shop_order_link()' in shop_qr
+        and "['services', 'customers', 'new-order', 'manage-orders', 'shop-qr']" in router,
+    "QR generation reuses existing local, privacy-safe QR script":
+        'class="shop-qr-preview walkin-qr-output" data-qr-link=' in shop_qr
+        and 'walkin-qr-output[data-qr-link]' in script,
+    "account settings link comes from profile name, not sidebar menu":
+        'class="sidebar-profile account-profile-link"' in layout
+        and "url('account')" in layout
+        and "['account', 'บัญชีของฉัน'" not in layout,
+    "guest QR outside shared order-detail grid keeps timeline alongside details":
+        'class="detail-grid"' in details
+        and 'class="order-qr-below"' in details
+        and details.find('class="detail-grid"') < details.find('>ติดตามสถานะ</h2>')
+        < details.find('class="order-qr-below"'),
+    "confirmation checkboxes are compact and still have a tappable label":
+        '.form-stack .dropoff-confirm-check input[type="checkbox"]' in style
+        and 'width:17px!important' in style
+        and '.form-stack .dropoff-confirm-check{' in style,
 }
 
 for name, passes in checks.items():
