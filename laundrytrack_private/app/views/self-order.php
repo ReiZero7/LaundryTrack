@@ -12,6 +12,7 @@ $defaultDue = date('Y-m-d\\TH:i', strtotime('+2 days'));
 <form method="post" action="index.php" id="new-order-form" class="form-stack">
 <?= csrf_field() ?>
 <input type="hidden" name="action" value="self-order-create">
+<p class="form-help" role="note">ขั้นตอน: เลือกบริการและวันที่ต้องการรับผ้า → ส่งคำขอ → นำผ้ามาส่งให้ร้านตรวจรับจริง โดยการกดสร้างออร์เดอร์ยังไม่ถือว่าร้านได้รับผ้าแล้ว</p>
 <div class="anti-bot-field" aria-hidden="true"><label>Website <input name="website" tabindex="-1" autocomplete="off"></label></div>
 <?php if (current_user()): ?>
     <div class="order-self-identity">กำลังสั่งซื้อในชื่อ <strong><?= e(current_user()['full_name']) ?></strong></div>
