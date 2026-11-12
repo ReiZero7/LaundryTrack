@@ -51,4 +51,4 @@ CREATE TABLE laundry__status_history_tbl (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 INSERT INTO laundry__services_tbl(id,name,unit,price,is_active)
-VALUES (1,'CI wash & fold','kg',35.00,1), (2,'CI inactive service','kg',50.00,0);
+VALUES (1,'CI wash & fold','kg',35.00,1), (2,'รีดผ้า CI','piece',50.00,1), (3,'CI inactive service','kg',40.00,0);
