@@ -314,6 +314,17 @@
       if (message) message.hidden = data.status !== 'ready';
       if (confirmForm) confirmForm.hidden = data.status !== 'ready' || data.pickup_requested === true;
       if (pendingMessage) pendingMessage.hidden = data.status !== 'ready' || data.pickup_requested !== true;
+      if (Array.isArray(data.services)) {
+        for (const item of data.services) {
+          if (!Number.isSafeInteger(item.id) || !['pending','working','done'].includes(item.status)) continue;
+          const row = panel.querySelector('[data-guest-service-item="' + item.id + '"]');
+          const label = row?.querySelector('[data-service-progress-label]');
+          if (label) {
+            label.textContent = typeof item.label === 'string' ? item.label : item.status;
+            label.className = 'service-work-badge service-work-' + item.status;
+          }
+        }
+      }
       if (previousStatus !== 'ready' && data.status === 'ready') showReadyToast();
       previousStatus = data.status;
     } catch (_) {
